@@ -43,12 +43,15 @@ class BookParserService {
     String author = 'Неизвестный автор';
     int totalUnits = 1;
 
+    String? coverPath;
+
     if (ext == '.epub') {
       format = BookFormat.epub;
       final parsed = await parseEpub(filePath);
       title = parsed.title.isNotEmpty ? parsed.title : fileName;
       author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
       totalUnits = parsed.chapters.length;
+      coverPath = await _extractEpubCover(filePath);
     } else if (ext == '.fb2') {
       format = BookFormat.fb2;
       final parsed = await parseFb2(filePath);
@@ -78,7 +81,38 @@ class BookParserService {
       scrollProgress: 0.0,
       addedAt: DateTime.now(),
       lastReadAt: DateTime.now(),
+      coverPath: coverPath,
     );
+  }
+
+  static Future<String?> _extractEpubCover(String filePath) async {
+    try {
+      final bytes = await File(filePath).readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+
+      // Search for cover image file in zip
+      final coverFile = archive.files.firstWhere(
+        (f) {
+          final n = f.name.toLowerCase();
+          return (n.contains('cover') || n.contains('titlepage')) &&
+              (n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png'));
+        },
+        orElse: () => archive.files.firstWhere(
+          (f) => f.name.endsWith('.jpg') || f.name.endsWith('.png'),
+          orElse: () => archive.files.first,
+        ),
+      );
+
+      if (coverFile.name.endsWith('.jpg') || coverFile.name.endsWith('.jpeg') || coverFile.name.endsWith('.png')) {
+        final cacheDir = Directory(p.join(p.dirname(filePath), '.covers'));
+        if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+
+        final targetPath = p.join(cacheDir.path, '${p.basenameWithoutExtension(filePath)}_cover.jpg');
+        await File(targetPath).writeAsBytes(coverFile.content as List<int>);
+        return targetPath;
+      }
+    } catch (_) {}
+    return null;
   }
 
   static Future<BookParsedData> parseBook(BookItem book) async {

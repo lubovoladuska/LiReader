@@ -71,6 +71,10 @@ class ReaderProvider extends ChangeNotifier {
     }
   }
 
+  void saveScrollProgress(double offset) {
+    _dbHelper.updateBookProgress(book.id, _currentChapterIndex, offset);
+  }
+
   void setFontSize(double size) {
     _fontSize = size.clamp(12.0, 32.0);
     notifyListeners();

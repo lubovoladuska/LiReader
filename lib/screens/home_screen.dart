@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/book_item.dart';
@@ -291,32 +292,41 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cover placeholder with pastel tones
+            // Cover: Real cover image if extracted, otherwise pastel placeholder
             Expanded(
               flex: 3,
               child: Container(
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppTheme.primaryPink.withValues(alpha: 0.35),
-                      AppTheme.accentPeach.withValues(alpha: 0.4),
-                    ],
-                  ),
+                  gradient: (book.coverPath != null && File(book.coverPath!).existsSync())
+                      ? null
+                      : LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppTheme.primaryPink.withValues(alpha: 0.35),
+                            AppTheme.accentPeach.withValues(alpha: 0.4),
+                          ],
+                        ),
+                  image: (book.coverPath != null && File(book.coverPath!).existsSync())
+                      ? DecorationImage(
+                          image: FileImage(File(book.coverPath!)),
+                          fit: BoxFit.cover,
+                        )
+                      : null,
                 ),
                 child: Stack(
                   children: [
-                    Center(
-                      child: Icon(
-                        book.format == BookFormat.pdf
-                            ? Icons.picture_as_pdf_rounded
-                            : Icons.menu_book_rounded,
-                        size: 44,
-                        color: AppTheme.primaryPinkDark.withValues(alpha: 0.8),
+                    if (book.coverPath == null || !File(book.coverPath!).existsSync())
+                      Center(
+                        child: Icon(
+                          book.format == BookFormat.pdf
+                              ? Icons.picture_as_pdf_rounded
+                              : Icons.menu_book_rounded,
+                          size: 44,
+                          color: AppTheme.primaryPinkDark.withValues(alpha: 0.8),
+                        ),
                       ),
-                    ),
                     // Format badge
                     Positioned(
                       top: 8,

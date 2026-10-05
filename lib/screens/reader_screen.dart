@@ -207,6 +207,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           onPressed: () => Scaffold.of(ctx).openEndDrawer(),
                         ),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.fullscreen_rounded),
+                        tooltip: 'Скрыть панели (полноэкранный режим)',
+                        onPressed: () => reader.setMenuVisible(false),
+                      ),
                     ],
                   )
                 : null,
@@ -235,6 +240,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           );
                         },
                       ),
+
+                      // Floating restore button when AppBar is hidden (Immersive mode)
+                      if (!reader.isMenuVisible)
+                        Positioned(
+                          top: 16,
+                          right: 16,
+                          child: FloatingActionButton.small(
+                            heroTag: 'showMenuBtn',
+                            elevation: 3,
+                            backgroundColor: Theme.of(context).cardColor.withValues(alpha: 0.85),
+                            tooltip: 'Показать меню',
+                            child: const Icon(Icons.fullscreen_exit_rounded, size: 22),
+                            onPressed: () => reader.setMenuVisible(true),
+                          ),
+                        ),
 
                       // Floating navigation controls for Desktop / Mouse
                       if (reader.isMenuVisible && chapters.length > 1) ...[

@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -26,7 +27,36 @@ class _ChapterContentViewState extends State<ChapterContentView> {
   final ScrollController _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+
+    // Restore scroll position after layout
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final reader = context.read<ReaderProvider>();
+      if (reader.book.currentChapterOrPage == widget.chapterIndex && reader.book.scrollProgress > 0) {
+        if (_scrollController.hasClients) {
+          final max = _scrollController.position.maxScrollExtent;
+          final target = reader.book.scrollProgress.clamp(0.0, max);
+          _scrollController.jumpTo(target);
+        }
+      }
+    });
+  }
+
+  void _onScroll() {
+    if (_scrollController.hasClients) {
+      final reader = context.read<ReaderProvider>();
+      if (reader.currentChapterIndex == widget.chapterIndex) {
+        reader.saveScrollProgress(_scrollController.offset);
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
   }
@@ -116,21 +146,108 @@ class _ChapterContentViewState extends State<ChapterContentView> {
     );
   }
 
+  void _showHighlightActionSheet(
+    BuildContext context,
+    BookHighlight highlight,
+    ReaderProvider reader,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      color: Color(highlight.colorValue),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Выделенный фрагмент', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                    tooltip: 'Удалить маркер',
+                    onPressed: () {
+                      reader.deleteHighlight(highlight.id);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Color(highlight.colorValue).withValues(alpha: 0.25),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  highlight.selectedText,
+                  style: const TextStyle(fontSize: 13, height: 1.4),
+                ),
+              ),
+              if (highlight.note != null && highlight.note!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('Заметка: ${highlight.note}', style: const TextStyle(fontStyle: FontStyle.italic)),
+              ],
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton.icon(
+                    icon: const Icon(Icons.copy_rounded, size: 16),
+                    label: const Text('Копировать'),
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: highlight.selectedText));
+                      Navigator.pop(ctx);
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPinkDark),
+                    icon: const Icon(Icons.edit_note, size: 18),
+                    label: const Text('Заметка / Цвет'),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showAddNoteDialog(context, highlight.selectedText, reader);
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Builds TextSpans with inline highlights painted onto matching text
   List<TextSpan> _buildHighlightedSpans(
+    BuildContext context,
     String fullText,
     List<BookHighlight> highlights,
     Color baseTextColor,
+    ReaderProvider reader,
   ) {
     if (highlights.isEmpty) {
       return [TextSpan(text: fullText, style: TextStyle(color: baseTextColor))];
     }
 
-    // Find occurrences of highlighted texts
     final spans = <TextSpan>[];
     int cursor = 0;
 
-    // Helper map of text intervals
     final intervals = <_HighlightInterval>[];
     for (final h in highlights) {
       if (h.selectedText.trim().isEmpty) continue;
@@ -141,18 +258,16 @@ class _ChapterContentViewState extends State<ChapterContentView> {
         intervals.add(_HighlightInterval(
           start: found,
           end: found + h.selectedText.length,
-          color: Color(h.colorValue),
-          note: h.note,
+          highlight: h,
         ));
         searchFrom = found + h.selectedText.length;
       }
     }
 
-    // Sort intervals by start pos
     intervals.sort((a, b) => a.start.compareTo(b.start));
 
     for (final interval in intervals) {
-      if (interval.start < cursor) continue; // Skip overlaps for simplicity
+      if (interval.start < cursor) continue;
 
       if (interval.start > cursor) {
         spans.add(TextSpan(
@@ -165,9 +280,13 @@ class _ChapterContentViewState extends State<ChapterContentView> {
         text: fullText.substring(interval.start, interval.end),
         style: TextStyle(
           color: Colors.black87,
-          backgroundColor: interval.color.withValues(alpha: 0.65),
+          backgroundColor: Color(interval.highlight.colorValue).withValues(alpha: 0.65),
           fontWeight: FontWeight.w500,
         ),
+        recognizer: TapGestureRecognizer()
+          ..onTap = () {
+            _showHighlightActionSheet(context, interval.highlight, reader);
+          },
       ));
 
       cursor = interval.end;
@@ -224,9 +343,11 @@ class _ChapterContentViewState extends State<ChapterContentView> {
                   SelectableText.rich(
                     TextSpan(
                       children: _buildHighlightedSpans(
+                        context,
                         widget.content,
                         chapterHighlights,
                         textColor,
+                        reader,
                       ),
                     ),
                     style: TextStyle(
@@ -300,13 +421,11 @@ class _ChapterContentViewState extends State<ChapterContentView> {
 class _HighlightInterval {
   final int start;
   final int end;
-  final Color color;
-  final String? note;
+  final BookHighlight highlight;
 
   _HighlightInterval({
     required this.start,
     required this.end,
-    required this.color,
-    this.note,
+    required this.highlight,
   });
 }
