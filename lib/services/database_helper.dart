@@ -23,8 +23,16 @@ class DatabaseHelper {
       databaseFactory = databaseFactoryFfi;
     }
 
-    final dbPath = await getApplicationDocumentsDirectory();
-    final path = p.join(dbPath.path, 'LiReader', filePath);
+    String basePath;
+    try {
+      final appDocDir = await getApplicationDocumentsDirectory();
+      basePath = appDocDir.path;
+    } catch (_) {
+      final userProfile = Platform.environment['USERPROFILE'] ?? Platform.environment['APPDATA'] ?? '.';
+      basePath = p.join(userProfile, 'Documents');
+    }
+
+    final path = p.join(basePath, 'LiReader', filePath);
 
     final dir = Directory(p.dirname(path));
     if (!await dir.exists()) {
@@ -34,8 +42,9 @@ class DatabaseHelper {
     return await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onCreate: _createDB,
+        onUpgrade: _upgradeDB,
       ),
     );
   }
@@ -53,7 +62,18 @@ class DatabaseHelper {
         scrollProgress REAL NOT NULL,
         addedAt TEXT NOT NULL,
         lastReadAt TEXT NOT NULL,
-        coverPath TEXT
+        coverPath TEXT,
+        shelfId TEXT,
+        isFavorite INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    await db.execute('''
+      CREATE TABLE shelves (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        iconCode INTEGER NOT NULL,
+        createdAt TEXT NOT NULL
       )
     ''');
 
@@ -69,6 +89,25 @@ class DatabaseHelper {
         FOREIGN KEY (bookId) REFERENCES books (id) ON DELETE CASCADE
       )
     ''');
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      try {
+        await db.execute('ALTER TABLE books ADD COLUMN shelfId TEXT');
+        await db.execute('ALTER TABLE books ADD COLUMN isFavorite INTEGER NOT NULL DEFAULT 0');
+      } catch (_) {}
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS shelves (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            iconCode INTEGER NOT NULL,
+            createdAt TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
+    }
   }
 
   Future<List<BookItem>> getBooks() async {
@@ -96,12 +135,51 @@ class DatabaseHelper {
     );
   }
 
+  Future<void> updateBookShelf(String bookId, String? shelfId) async {
+    final db = await database;
+    await db.update(
+      'books',
+      {'shelfId': shelfId},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
+  }
+
+  Future<void> toggleBookFavorite(String bookId, bool isFavorite) async {
+    final db = await database;
+    await db.update(
+      'books',
+      {'isFavorite': isFavorite ? 1 : 0},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
+  }
+
   Future<void> deleteBook(String id) async {
     final db = await database;
     await db.delete('books', where: 'id = ?', whereArgs: [id]);
     await db.delete('highlights', where: 'bookId = ?', whereArgs: [id]);
   }
 
+  // Shelves
+  Future<List<ShelfItem>> getShelves() async {
+    final db = await database;
+    final maps = await db.query('shelves', orderBy: 'createdAt ASC');
+    return maps.map((e) => ShelfItem.fromMap(e)).toList();
+  }
+
+  Future<void> insertShelf(ShelfItem shelf) async {
+    final db = await database;
+    await db.insert('shelves', shelf.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deleteShelf(String id) async {
+    final db = await database;
+    await db.delete('shelves', where: 'id = ?', whereArgs: [id]);
+    await db.update('books', {'shelfId': null}, where: 'shelfId = ?', whereArgs: [id]);
+  }
+
+  // Highlights
   Future<List<BookHighlight>> getHighlightsForBook(String bookId) async {
     final db = await database;
     final maps = await db.query(

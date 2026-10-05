@@ -1,38 +1,83 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import '../models/book_item.dart';
 import '../services/book_parser_service.dart';
 import '../services/database_helper.dart';
 
+enum LibraryFilter {
+  all,
+  reading,
+  favorites,
+  shelf,
+}
+
 class LibraryProvider extends ChangeNotifier {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  static const _uuid = Uuid();
 
   List<BookItem> _books = [];
+  List<ShelfItem> _shelves = [];
   bool _isLoading = false;
   String _searchQuery = '';
+  LibraryFilter _activeFilter = LibraryFilter.all;
+  String? _selectedShelfId;
 
-  List<BookItem> get books {
-    if (_searchQuery.trim().isEmpty) {
-      return _books;
-    }
-    final q = _searchQuery.toLowerCase();
-    return _books.where((b) => b.title.toLowerCase().contains(q) || b.author.toLowerCase().contains(q)).toList();
-  }
-
+  List<BookItem> get allBooks => _books;
+  List<ShelfItem> get shelves => _shelves;
   bool get isLoading => _isLoading;
   String get searchQuery => _searchQuery;
+  LibraryFilter get activeFilter => _activeFilter;
+  String? get selectedShelfId => _selectedShelfId;
 
-  Future<void> loadBooks() async {
+  ShelfItem? get activeShelf {
+    if (_selectedShelfId == null) return null;
+    return _shelves.where((s) => s.id == _selectedShelfId).firstOrNull;
+  }
+
+  List<BookItem> get books {
+    List<BookItem> filtered = _books;
+
+    switch (_activeFilter) {
+      case LibraryFilter.all:
+        break;
+      case LibraryFilter.reading:
+        filtered = filtered.where((b) => b.currentChapterOrPage > 0 || b.scrollProgress > 0).toList();
+        break;
+      case LibraryFilter.favorites:
+        filtered = filtered.where((b) => b.isFavorite).toList();
+        break;
+      case LibraryFilter.shelf:
+        filtered = filtered.where((b) => b.shelfId == _selectedShelfId).toList();
+        break;
+    }
+
+    if (_searchQuery.trim().isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      filtered = filtered.where((b) => b.title.toLowerCase().contains(q) || b.author.toLowerCase().contains(q)).toList();
+    }
+
+    return filtered;
+  }
+
+  Future<void> loadLibrary() async {
     _isLoading = true;
     notifyListeners();
     try {
       _books = await _dbHelper.getBooks();
+      _shelves = await _dbHelper.getShelves();
     } catch (e) {
-      debugPrint('Error loading books: $e');
+      debugPrint('Error loading library: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  void setFilter(LibraryFilter filter, {String? shelfId}) {
+    _activeFilter = filter;
+    _selectedShelfId = shelfId;
+    notifyListeners();
   }
 
   void setSearchQuery(String query) {
@@ -52,9 +97,12 @@ class LibraryProvider extends ChangeNotifier {
         final filePath = result.files.first.path;
         if (filePath != null) {
           final newBook = await BookParserService.createBookItemFromFile(filePath);
-          await _dbHelper.insertBook(newBook);
-          await loadBooks();
-          return newBook;
+          final bookWithShelf = newBook.copyWith(
+            shelfId: _activeFilter == LibraryFilter.shelf ? _selectedShelfId : null,
+          );
+          await _dbHelper.insertBook(bookWithShelf);
+          await loadLibrary();
+          return bookWithShelf;
         }
       }
     } catch (e) {
@@ -74,6 +122,54 @@ class LibraryProvider extends ChangeNotifier {
       );
       notifyListeners();
     }
+  }
+
+  Future<void> toggleFavorite(String bookId) async {
+    final idx = _books.indexWhere((b) => b.id == bookId);
+    if (idx != -1) {
+      final newFav = !_books[idx].isFavorite;
+      await _dbHelper.toggleBookFavorite(bookId, newFav);
+      _books[idx] = _books[idx].copyWith(isFavorite: newFav);
+      notifyListeners();
+    }
+  }
+
+  Future<void> assignBookToShelf(String bookId, String? shelfId) async {
+    await _dbHelper.updateBookShelf(bookId, shelfId);
+    final idx = _books.indexWhere((b) => b.id == bookId);
+    if (idx != -1) {
+      _books[idx] = _books[idx].copyWith(
+        shelfId: shelfId,
+        clearShelf: shelfId == null,
+      );
+      notifyListeners();
+    }
+  }
+
+  Future<void> createShelf(String name) async {
+    final shelf = ShelfItem(
+      id: _uuid.v4(),
+      name: name,
+      createdAt: DateTime.now(),
+    );
+    await _dbHelper.insertShelf(shelf);
+    _shelves.add(shelf);
+    notifyListeners();
+  }
+
+  Future<void> deleteShelf(String shelfId) async {
+    await _dbHelper.deleteShelf(shelfId);
+    _shelves.removeWhere((s) => s.id == shelfId);
+    for (int i = 0; i < _books.length; i++) {
+      if (_books[i].shelfId == shelfId) {
+        _books[i] = _books[i].copyWith(clearShelf: true);
+      }
+    }
+    if (_selectedShelfId == shelfId) {
+      _activeFilter = LibraryFilter.all;
+      _selectedShelfId = null;
+    }
+    notifyListeners();
   }
 
   Future<void> removeBook(String id) async {

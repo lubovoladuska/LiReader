@@ -7,6 +7,38 @@ enum BookFormat {
   unknown,
 }
 
+class ShelfItem {
+  final String id;
+  final String name;
+  final int iconCode;
+  final DateTime createdAt;
+
+  ShelfItem({
+    required this.id,
+    required this.name,
+    this.iconCode = 0xe59c, // Icons.bookmark_rounded
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'iconCode': iconCode,
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
+
+  factory ShelfItem.fromMap(Map<String, dynamic> map) {
+    return ShelfItem(
+      id: map['id'],
+      name: map['name'],
+      iconCode: map['iconCode'] ?? 0xe59c,
+      createdAt: DateTime.tryParse(map['createdAt'] ?? '') ?? DateTime.now(),
+    );
+  }
+}
+
 class BookItem {
   final String id;
   final String title;
@@ -19,6 +51,8 @@ class BookItem {
   final DateTime addedAt;
   final DateTime lastReadAt;
   final String? coverPath;
+  final String? shelfId;
+  final bool isFavorite;
 
   BookItem({
     required this.id,
@@ -32,6 +66,8 @@ class BookItem {
     required this.addedAt,
     required this.lastReadAt,
     this.coverPath,
+    this.shelfId,
+    this.isFavorite = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -47,6 +83,8 @@ class BookItem {
       'addedAt': addedAt.toIso8601String(),
       'lastReadAt': lastReadAt.toIso8601String(),
       'coverPath': coverPath,
+      'shelfId': shelfId,
+      'isFavorite': isFavorite ? 1 : 0,
     };
   }
 
@@ -66,6 +104,8 @@ class BookItem {
       addedAt: DateTime.tryParse(map['addedAt'] ?? '') ?? DateTime.now(),
       lastReadAt: DateTime.tryParse(map['lastReadAt'] ?? '') ?? DateTime.now(),
       coverPath: map['coverPath'],
+      shelfId: map['shelfId'],
+      isFavorite: (map['isFavorite'] == 1 || map['isFavorite'] == true),
     );
   }
 
@@ -77,6 +117,9 @@ class BookItem {
     double? scrollProgress,
     DateTime? lastReadAt,
     String? coverPath,
+    String? shelfId,
+    bool? isFavorite,
+    bool clearShelf = false,
   }) {
     return BookItem(
       id: id,
@@ -90,6 +133,8 @@ class BookItem {
       addedAt: addedAt,
       lastReadAt: lastReadAt ?? this.lastReadAt,
       coverPath: coverPath ?? this.coverPath,
+      shelfId: clearShelf ? null : (shelfId ?? this.shelfId),
+      isFavorite: isFavorite ?? this.isFavorite,
     );
   }
 }

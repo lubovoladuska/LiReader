@@ -47,6 +47,7 @@ dependencies:
   flutter_html: ^3.0.0
   epub_view: ^3.3.0
   xml: ^6.6.1
+  path_provider_windows: 2.3.0
 
 dev_dependencies:
   flutter_test:

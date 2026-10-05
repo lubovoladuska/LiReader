@@ -39,47 +39,43 @@ class ChapterPickerDialog extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Expanded(
-                child: GridView.builder(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 5,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: 1.1,
-                  ),
+                child: ListView.separated(
                   itemCount: chapters.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (ctx, idx) {
                     final isCurrent = idx == currentIdx;
-                    return InkWell(
+                    final chap = chapters[idx];
+                    return ListTile(
+                      dense: true,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      selected: isCurrent,
+                      selectedTileColor: AppTheme.primaryPink.withValues(alpha: 0.15),
+                      leading: CircleAvatar(
+                        radius: 14,
+                        backgroundColor: isCurrent ? AppTheme.primaryPinkDark : (isDark ? Colors.white12 : Colors.black12),
+                        child: Text(
+                          '${idx + 1}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isCurrent ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        chap.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
+                          color: isCurrent ? AppTheme.primaryPinkDark : null,
+                        ),
+                      ),
                       onTap: () {
                         reader.setChapter(idx);
                         Navigator.pop(context, idx);
                       },
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: isCurrent
-                              ? AppTheme.primaryPinkDark
-                              : (isDark ? AppTheme.darkCard : const Color(0xFFF6EFF1)),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: isCurrent
-                                ? AppTheme.primaryPinkDark
-                                : (isDark ? AppTheme.darkDivider : AppTheme.lightDivider),
-                            width: 1,
-                          ),
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          '${idx + 1}',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500,
-                            color: isCurrent
-                                ? Colors.white
-                                : (isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary),
-                          ),
-                        ),
-                      ),
                     );
                   },
                 ),

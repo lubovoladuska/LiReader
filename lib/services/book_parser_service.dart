@@ -190,6 +190,30 @@ class BookParserService {
       }
     }
 
+    // Extract NCX table of contents if available
+    final tocTitles = <String, String>{};
+    final ncxItem = manifestItems.entries.firstWhere(
+      (e) => e.value.endsWith('.ncx'),
+      orElse: () => const MapEntry('', ''),
+    );
+    if (ncxItem.value.isNotEmpty) {
+      final ncxPath = opfDir.isEmpty ? ncxItem.value : p.join(opfDir, ncxItem.value).replaceAll(r'\', '/');
+      final ncxFile = archive.findFile(ncxPath);
+      if (ncxFile != null) {
+        try {
+          final ncxXml = XmlDocument.parse(utf8.decode(ncxFile.content as List<int>, allowMalformed: true));
+          for (final navPoint in ncxXml.findAllElements('navPoint')) {
+            final label = navPoint.findAllElements('text').firstOrNull?.innerText.trim();
+            final src = navPoint.findAllElements('content').firstOrNull?.getAttribute('src');
+            if (label != null && src != null && label.isNotEmpty) {
+              final pureSrc = src.split('#').first;
+              tocTitles[pureSrc] = label;
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
     // Spine reading order
     int chapterIndex = 0;
     for (final itemref in opfXml.findAllElements('itemref')) {
@@ -201,10 +225,30 @@ class BookParserService {
         if (contentFile != null) {
           final htmlContent = utf8.decode(contentFile.content as List<int>, allowMalformed: true);
           final cleanText = _extractTextFromHtml(htmlContent);
+          
           if (cleanText.trim().isNotEmpty) {
+            String detectedTitle = '';
+            if (tocTitles.containsKey(href)) {
+              detectedTitle = tocTitles[href]!;
+            } else {
+              // Try to find first heading in HTML or fallback to first line
+              final hMatch = RegExp(r'<h[1-3][^>]*>(.*?)</h[1-3]>', caseSensitive: false).firstMatch(htmlContent);
+              if (hMatch != null) {
+                detectedTitle = _extractTextFromHtml(hMatch.group(1) ?? '');
+              }
+              if (detectedTitle.trim().isEmpty) {
+                final firstLine = cleanText.split('\n').firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+                if (firstLine.length < 60 && !firstLine.contains('.')) {
+                  detectedTitle = firstLine.trim();
+                }
+              }
+            }
+
+            final finalTitle = detectedTitle.isNotEmpty ? detectedTitle : 'Раздел ${chapterIndex + 1}';
+
             chapters.add(BookChapter(
               index: chapterIndex,
-              title: 'Глава ${chapterIndex + 1}',
+              title: finalTitle,
               content: cleanText,
             ));
             chapterIndex++;

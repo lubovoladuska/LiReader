@@ -1,39 +1,30 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 
-class HighlightContextMenu extends StatelessWidget {
-  final String selectedText;
-  final Function(int colorValue) onColorSelected;
+class HighlightToolbar extends StatelessWidget {
   final VoidCallback onAddNote;
   final VoidCallback onCopy;
+  final Function(int colorValue) onColorSelected;
 
-  const HighlightContextMenu({
+  const HighlightToolbar({
     super.key,
-    required this.selectedText,
-    required this.onColorSelected,
     required this.onAddNote,
     required this.onCopy,
+    required this.onColorSelected,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF2C272A) : Colors.white;
 
     return Material(
-      color: Colors.transparent,
+      elevation: 6,
+      borderRadius: BorderRadius.circular(24),
+      color: isDark ? const Color(0xFF2E292C) : Colors.white,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: bg,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.18),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
           border: Border.all(
             color: isDark ? const Color(0xFF453D41) : AppTheme.lightDivider,
             width: 1,
@@ -42,10 +33,9 @@ class HighlightContextMenu extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Color circles
             ...AppTheme.highlightColors.map((color) {
               return InkWell(
-                onTap: () => onColorSelected(color.value),
+                onTap: () => onColorSelected(color.toARGB32()),
                 borderRadius: BorderRadius.circular(12),
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -55,7 +45,7 @@ class HighlightContextMenu extends StatelessWidget {
                     color: color,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.black.withOpacity(0.15),
+                      color: Colors.black.withValues(alpha: 0.15),
                       width: 1,
                     ),
                   ),
@@ -72,7 +62,7 @@ class HighlightContextMenu extends StatelessWidget {
               icon: const Icon(Icons.note_add_outlined, size: 18),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              tooltip: 'Добавить заметку',
+              tooltip: 'Заметка',
               onPressed: onAddNote,
             ),
             IconButton(

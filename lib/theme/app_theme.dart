@@ -35,11 +35,11 @@ class AppTheme {
   ];
 
   static ThemeData get lightTheme {
-    final baseTextTheme = GoogleFonts.interTextTheme();
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: primaryPink,
+      fontFamily: 'Segoe UI',
       scaffoldBackgroundColor: lightBg,
       colorScheme: const ColorScheme.light(
         primary: primaryPink,
@@ -50,21 +50,25 @@ class AppTheme {
         onSurface: lightTextPrimary,
         surfaceContainerHighest: Color(0xFFF4ECEE),
       ),
-      textTheme: baseTextTheme.copyWith(
-        titleLarge: baseTextTheme.titleLarge?.copyWith(
+      textTheme: const TextTheme(
+        titleLarge: TextStyle(
           fontWeight: FontWeight.w700,
           color: lightTextPrimary,
+          fontSize: 22,
         ),
-        titleMedium: baseTextTheme.titleMedium?.copyWith(
+        titleMedium: TextStyle(
           fontWeight: FontWeight.w600,
           color: lightTextPrimary,
+          fontSize: 16,
         ),
-        bodyLarge: baseTextTheme.bodyLarge?.copyWith(
+        bodyLarge: TextStyle(
           color: lightTextPrimary,
           height: 1.6,
+          fontSize: 16,
         ),
-        bodyMedium: baseTextTheme.bodyMedium?.copyWith(
+        bodyMedium: TextStyle(
           color: lightTextSecondary,
+          fontSize: 14,
         ),
       ),
       appBarTheme: const AppBarTheme(
@@ -95,11 +99,11 @@ class AppTheme {
   }
 
   static ThemeData get darkTheme {
-    final baseTextTheme = GoogleFonts.interTextTheme(ThemeData.dark().textTheme);
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       primaryColor: primaryPinkDark,
+      fontFamily: 'Segoe UI',
       scaffoldBackgroundColor: darkBg,
       colorScheme: const ColorScheme.dark(
         primary: primaryPinkDark,
@@ -110,21 +114,25 @@ class AppTheme {
         onSurface: darkTextPrimary,
         surfaceContainerHighest: Color(0xFF332D30),
       ),
-      textTheme: baseTextTheme.copyWith(
-        titleLarge: baseTextTheme.titleLarge?.copyWith(
+      textTheme: const TextTheme(
+        titleLarge: TextStyle(
           fontWeight: FontWeight.w700,
           color: darkTextPrimary,
+          fontSize: 22,
         ),
-        titleMedium: baseTextTheme.titleMedium?.copyWith(
+        titleMedium: TextStyle(
           fontWeight: FontWeight.w600,
           color: darkTextPrimary,
+          fontSize: 16,
         ),
-        bodyLarge: baseTextTheme.bodyLarge?.copyWith(
+        bodyLarge: TextStyle(
           color: darkTextPrimary,
           height: 1.6,
+          fontSize: 16,
         ),
-        bodyMedium: baseTextTheme.bodyMedium?.copyWith(
+        bodyMedium: TextStyle(
           color: darkTextSecondary,
+          fontSize: 14,
         ),
       ),
       appBarTheme: const AppBarTheme(
