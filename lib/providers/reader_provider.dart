@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/book_item.dart';
+import '../models/reader_theme_settings.dart';
 import '../services/book_parser_service.dart';
 import '../services/database_helper.dart';
 
@@ -12,10 +13,9 @@ class ReaderProvider extends ChangeNotifier {
   bool _isLoading = true;
   BookParsedData? _parsedData;
   int _currentChapterIndex = 0;
-  double _fontSize = 18.0;
-  double _lineHeight = 1.6;
   bool _isMenuVisible = true;
   List<BookHighlight> _highlights = [];
+  ReaderThemeSettings _themeSettings = const ReaderThemeSettings();
 
   ReaderProvider({required this.book}) {
     _currentChapterIndex = book.currentChapterOrPage;
@@ -25,10 +25,13 @@ class ReaderProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   BookParsedData? get parsedData => _parsedData;
   int get currentChapterIndex => _currentChapterIndex;
-  double get fontSize => _fontSize;
-  double get lineHeight => _lineHeight;
   bool get isMenuVisible => _isMenuVisible;
   List<BookHighlight> get highlights => _highlights;
+  ReaderThemeSettings get themeSettings => _themeSettings;
+
+  // Backwards compatibility shortcuts
+  double get fontSize => _themeSettings.fontSize;
+  double get lineHeight => _themeSettings.lineHeight;
 
   int get totalChapters => _parsedData?.chapters.length ?? 1;
 
@@ -75,15 +78,66 @@ class ReaderProvider extends ChangeNotifier {
     _dbHelper.updateBookProgress(book.id, _currentChapterIndex, offset);
   }
 
+  // --- Theme & Typography Settings ---
+
+  void updateThemeSettings(ReaderThemeSettings newSettings) {
+    _themeSettings = newSettings;
+    notifyListeners();
+  }
+
   void setFontSize(double size) {
-    _fontSize = size.clamp(12.0, 32.0);
+    _themeSettings = _themeSettings.copyWith(fontSize: size.clamp(12.0, 36.0));
     notifyListeners();
   }
 
   void setLineHeight(double height) {
-    _lineHeight = height.clamp(1.2, 2.4);
+    _themeSettings = _themeSettings.copyWith(lineHeight: height.clamp(1.2, 2.6));
     notifyListeners();
   }
+
+  void setLetterSpacing(double spacing) {
+    _themeSettings = _themeSettings.copyWith(letterSpacing: spacing.clamp(-0.5, 3.0));
+    notifyListeners();
+  }
+
+  void setParagraphSpacing(double spacing) {
+    _themeSettings = _themeSettings.copyWith(paragraphSpacing: spacing.clamp(8.0, 36.0));
+    notifyListeners();
+  }
+
+  void setFontFamily(ReaderFontFamily family) {
+    _themeSettings = _themeSettings.copyWith(fontFamily: family);
+    notifyListeners();
+  }
+
+  void setTextAlign(TextAlign align) {
+    _themeSettings = _themeSettings.copyWith(textAlign: align);
+    notifyListeners();
+  }
+
+  void setHorizontalPadding(double padding) {
+    _themeSettings = _themeSettings.copyWith(horizontalPadding: padding.clamp(12.0, 80.0));
+    notifyListeners();
+  }
+
+  void setColorPreset(ReaderColorPreset preset) {
+    _themeSettings = _themeSettings.copyWith(
+      colorPreset: preset,
+      isCustomColors: false,
+    );
+    notifyListeners();
+  }
+
+  void setCustomColors({Color? background, Color? text}) {
+    _themeSettings = _themeSettings.copyWith(
+      customBackgroundColor: background ?? _themeSettings.customBackgroundColor,
+      customTextColor: text ?? _themeSettings.customTextColor,
+      isCustomColors: true,
+    );
+    notifyListeners();
+  }
+
+  // --- Highlights ---
 
   Future<void> addHighlight({
     required String selectedText,

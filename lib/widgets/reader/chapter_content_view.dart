@@ -305,8 +305,8 @@ class _ChapterContentViewState extends State<ChapterContentView> {
   @override
   Widget build(BuildContext context) {
     final reader = context.watch<ReaderProvider>();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary;
+    final settings = reader.themeSettings;
+    final textColor = settings.activeText;
 
     final chapterHighlights = reader.highlights.where((h) => h.chapterIndex == widget.chapterIndex).toList();
 
@@ -314,47 +314,61 @@ class _ChapterContentViewState extends State<ChapterContentView> {
       onTap: () {
         reader.toggleMenu();
       },
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 820),
-          child: Scrollbar(
-            controller: _scrollController,
-            child: SingleChildScrollView(
+      child: Container(
+        color: settings.activeBackground,
+        width: double.infinity,
+        height: double.infinity,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 860),
+            child: Scrollbar(
               controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Chapter Header (only show if not already present in content)
-                  if (!widget.content.trimLeft().toLowerCase().startsWith(widget.title.trim().toLowerCase()))
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: Text(
-                        widget.title,
-                        style: TextStyle(
-                          fontSize: reader.fontSize * 1.35,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryPinkDark,
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                padding: EdgeInsets.symmetric(
+                  horizontal: settings.horizontalPadding,
+                  vertical: 36,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Chapter Header (only show if not already present in content)
+                    if (!widget.content.trimLeft().toLowerCase().startsWith(widget.title.trim().toLowerCase()))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        child: Text(
+                          widget.title,
+                          textAlign: settings.textAlign,
+                          style: TextStyle(
+                            fontFamily: settings.fontFamily.fontFamily,
+                            fontSize: settings.fontSize * 1.35,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: settings.letterSpacing,
+                            color: AppTheme.primaryPinkDark,
+                          ),
                         ),
                       ),
-                    ),
 
-                  // Chapter Content with native SelectableText and Toolbar
-                  SelectableText.rich(
-                    TextSpan(
-                      children: _buildHighlightedSpans(
-                        context,
-                        widget.content,
-                        chapterHighlights,
-                        textColor,
-                        reader,
+                    // Chapter Content with rich styling
+                    SelectableText.rich(
+                      TextSpan(
+                        children: _buildHighlightedSpans(
+                          context,
+                          widget.content,
+                          chapterHighlights,
+                          textColor,
+                          reader,
+                        ),
                       ),
-                    ),
-                    style: TextStyle(
-                      fontSize: reader.fontSize,
-                      height: reader.lineHeight,
-                    ),
-                    contextMenuBuilder: (context, editableTextState) {
+                      textAlign: settings.textAlign,
+                      style: TextStyle(
+                        fontFamily: settings.fontFamily.fontFamily,
+                        fontSize: settings.fontSize,
+                        height: settings.lineHeight,
+                        letterSpacing: settings.letterSpacing,
+                        color: textColor,
+                      ),
+                      contextMenuBuilder: (context, editableTextState) {
                       final selection = editableTextState.textEditingValue.selection;
                       final selectedText = editableTextState.textEditingValue.text.substring(
                         selection.start,
@@ -414,8 +428,9 @@ class _ChapterContentViewState extends State<ChapterContentView> {
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }
 
 class _HighlightInterval {

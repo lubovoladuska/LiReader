@@ -9,6 +9,8 @@ import '../widgets/reader/book_notes_sidebar.dart';
 import '../widgets/reader/chapter_content_view.dart';
 import '../widgets/reader/chapter_picker_dialog.dart';
 
+import '../widgets/reader/reader_theme_settings_sheet.dart';
+
 class ReaderScreen extends StatefulWidget {
   final BookItem book;
 
@@ -38,89 +40,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
     context.read<LibraryProvider>().updateProgress(widget.book.id, index, 0.0);
   }
 
-  void _showFontSettings(BuildContext context, ReaderProvider reader) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
+  void _showThemeSettings(BuildContext context, ReaderProvider reader) {
     showModalBottomSheet(
       context: context,
-      backgroundColor: isDark ? AppTheme.darkSurface : AppTheme.lightSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Настройки текста',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Размер шрифта'),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: () {
-                          reader.setFontSize(reader.fontSize - 1);
-                          setSheetState(() {});
-                        },
-                      ),
-                      Text('${reader.fontSize.toInt()} pt', style: const TextStyle(fontWeight: FontWeight.bold)),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: () {
-                          reader.setFontSize(reader.fontSize + 1);
-                          setSheetState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Межстрочный интервал'),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.density_small_rounded),
-                        onPressed: () {
-                          reader.setLineHeight(1.4);
-                          setSheetState(() {});
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.density_medium_rounded),
-                        onPressed: () {
-                          reader.setLineHeight(1.6);
-                          setSheetState(() {});
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.density_large_rounded),
-                        onPressed: () {
-                          reader.setLineHeight(1.9);
-                          setSheetState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => ReaderThemeSettingsSheet(reader: reader),
     );
   }
 
@@ -196,9 +121,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                     actions: [
                       if (widget.book.format != BookFormat.pdf)
                         IconButton(
-                          icon: const Icon(Icons.text_fields_rounded),
-                          tooltip: 'Настройки шрифта',
-                          onPressed: () => _showFontSettings(context, reader),
+                          icon: const Icon(Icons.tune_rounded),
+                          tooltip: 'Оформление текста и темы',
+                          onPressed: () => _showThemeSettings(context, reader),
                         ),
                       Builder(
                         builder: (ctx) => IconButton(
