@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../models/book_item.dart';
 import '../providers/library_provider.dart';
 import '../providers/reader_provider.dart';
-import '../theme/app_theme.dart';
 import '../widgets/reader/book_notes_sidebar.dart';
 import '../widgets/reader/chapter_content_view.dart';
 import '../widgets/reader/chapter_picker_dialog.dart';

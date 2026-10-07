@@ -58,7 +58,7 @@ class BookNotesSidebar extends StatelessWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   itemCount: highlights.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                  separatorBuilder: (context, index) => const Divider(height: 1, indent: 16, endIndent: 16),
                   itemBuilder: (ctx, idx) {
                     final item = highlights[idx];
                     return InkWell(
@@ -103,7 +103,7 @@ class BookNotesSidebar extends StatelessWidget {
                             Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: Color(item.colorValue).withOpacity(0.2),
+                                color: Color(item.colorValue).withValues(alpha: 0.2),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(

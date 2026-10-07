@@ -42,7 +42,7 @@ class DatabaseHelper {
     return await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       ),
@@ -89,6 +89,13 @@ class DatabaseHelper {
         FOREIGN KEY (bookId) REFERENCES books (id) ON DELETE CASCADE
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
@@ -108,6 +115,35 @@ class DatabaseHelper {
         ''');
       } catch (_) {}
     }
+    if (oldVersion < 3) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          )
+        ''');
+      } catch (_) {}
+    }
+  }
+
+  // Global Settings Storage
+  Future<String?> getSetting(String key) async {
+    final db = await database;
+    final res = await db.query('settings', where: 'key = ?', whereArgs: [key], limit: 1);
+    if (res.isNotEmpty) {
+      return res.first['value'] as String?;
+    }
+    return null;
+  }
+
+  Future<void> saveSetting(String key, String value) async {
+    final db = await database;
+    await db.insert(
+      'settings',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<List<BookItem>> getBooks() async {

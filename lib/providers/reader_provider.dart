@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/book_item.dart';
@@ -42,6 +43,15 @@ class ReaderProvider extends ChangeNotifier {
       _parsedData = await BookParserService.parseBook(book);
       _highlights = await _dbHelper.getHighlightsForBook(book.id);
 
+      // Load persisted global theme settings
+      final settingsJson = await _dbHelper.getSetting('reader_theme_settings');
+      if (settingsJson != null) {
+        try {
+          final map = json.decode(settingsJson) as Map<String, dynamic>;
+          _themeSettings = ReaderThemeSettings.fromMap(map);
+        } catch (_) {}
+      }
+
       // Clamp chapter index
       if (_currentChapterIndex >= totalChapters) {
         _currentChapterIndex = 0;
@@ -52,6 +62,13 @@ class ReaderProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  void _persistSettings() {
+    try {
+      final jsonStr = json.encode(_themeSettings.toMap());
+      _dbHelper.saveSetting('reader_theme_settings', jsonStr);
+    } catch (_) {}
   }
 
   void toggleMenu() {
@@ -82,41 +99,55 @@ class ReaderProvider extends ChangeNotifier {
 
   void updateThemeSettings(ReaderThemeSettings newSettings) {
     _themeSettings = newSettings;
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void resetThemeToDefaults() {
+    _themeSettings = const ReaderThemeSettings();
+    _persistSettings();
     notifyListeners();
   }
 
   void setFontSize(double size) {
     _themeSettings = _themeSettings.copyWith(fontSize: size.clamp(12.0, 36.0));
+    _persistSettings();
     notifyListeners();
   }
 
   void setLineHeight(double height) {
     _themeSettings = _themeSettings.copyWith(lineHeight: height.clamp(1.2, 2.6));
+    _persistSettings();
     notifyListeners();
   }
 
   void setLetterSpacing(double spacing) {
     _themeSettings = _themeSettings.copyWith(letterSpacing: spacing.clamp(-0.5, 3.0));
+    _persistSettings();
     notifyListeners();
   }
 
   void setParagraphSpacing(double spacing) {
     _themeSettings = _themeSettings.copyWith(paragraphSpacing: spacing.clamp(8.0, 36.0));
+    _persistSettings();
     notifyListeners();
   }
 
   void setFontFamily(ReaderFontFamily family) {
     _themeSettings = _themeSettings.copyWith(fontFamily: family);
+    _persistSettings();
     notifyListeners();
   }
 
   void setTextAlign(TextAlign align) {
     _themeSettings = _themeSettings.copyWith(textAlign: align);
+    _persistSettings();
     notifyListeners();
   }
 
   void setHorizontalPadding(double padding) {
     _themeSettings = _themeSettings.copyWith(horizontalPadding: padding.clamp(12.0, 80.0));
+    _persistSettings();
     notifyListeners();
   }
 
@@ -125,6 +156,7 @@ class ReaderProvider extends ChangeNotifier {
       colorPreset: preset,
       isCustomColors: false,
     );
+    _persistSettings();
     notifyListeners();
   }
 
@@ -134,6 +166,7 @@ class ReaderProvider extends ChangeNotifier {
       customTextColor: text ?? _themeSettings.customTextColor,
       isCustomColors: true,
     );
+    _persistSettings();
     notifyListeners();
   }
 

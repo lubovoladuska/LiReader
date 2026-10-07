@@ -34,7 +34,6 @@ class BookParserService {
   static const _uuid = Uuid();
 
   static Future<BookItem> createBookItemFromFile(String filePath) async {
-    final file = File(filePath);
     final ext = p.extension(filePath).toLowerCase();
     final fileName = p.basenameWithoutExtension(filePath);
 

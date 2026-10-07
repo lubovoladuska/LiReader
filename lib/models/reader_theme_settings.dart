@@ -54,6 +54,51 @@ class ReaderThemeSettings {
   Color get activeBackground => isCustomColors ? customBackgroundColor : colorPreset.backgroundColor;
   Color get activeText => isCustomColors ? customTextColor : colorPreset.textColor;
 
+  Map<String, dynamic> toMap() {
+    return {
+      'fontFamily': fontFamily.name,
+      'fontSize': fontSize,
+      'lineHeight': lineHeight,
+      'letterSpacing': letterSpacing,
+      'paragraphSpacing': paragraphSpacing,
+      'textAlign': textAlign.name,
+      'horizontalPadding': horizontalPadding,
+      'colorPreset': colorPreset.name,
+      'customBackgroundColor': customBackgroundColor.toARGB32(),
+      'customTextColor': customTextColor.toARGB32(),
+      'isCustomColors': isCustomColors ? 1 : 0,
+    };
+  }
+
+  factory ReaderThemeSettings.fromMap(Map<String, dynamic> map) {
+    return ReaderThemeSettings(
+      fontFamily: ReaderFontFamily.values.firstWhere(
+        (e) => e.name == map['fontFamily'],
+        orElse: () => ReaderFontFamily.serif,
+      ),
+      fontSize: (map['fontSize'] as num?)?.toDouble() ?? 18.0,
+      lineHeight: (map['lineHeight'] as num?)?.toDouble() ?? 1.65,
+      letterSpacing: (map['letterSpacing'] as num?)?.toDouble() ?? 0.2,
+      paragraphSpacing: (map['paragraphSpacing'] as num?)?.toDouble() ?? 16.0,
+      textAlign: TextAlign.values.firstWhere(
+        (e) => e.name == map['textAlign'],
+        orElse: () => TextAlign.left,
+      ),
+      horizontalPadding: (map['horizontalPadding'] as num?)?.toDouble() ?? 32.0,
+      colorPreset: ReaderColorPreset.values.firstWhere(
+        (e) => e.name == map['colorPreset'],
+        orElse: () => ReaderColorPreset.paper,
+      ),
+      customBackgroundColor: map['customBackgroundColor'] != null
+          ? Color(map['customBackgroundColor'])
+          : const Color(0xFFF7F1E5),
+      customTextColor: map['customTextColor'] != null
+          ? Color(map['customTextColor'])
+          : const Color(0xFF2E2620),
+      isCustomColors: map['isCustomColors'] == 1,
+    );
+  }
+
   ReaderThemeSettings copyWith({
     ReaderFontFamily? fontFamily,
     double? fontSize,

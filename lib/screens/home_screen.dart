@@ -277,8 +277,28 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildBookCard(BuildContext context, BookItem book, bool isDark) {
     final library = context.read<LibraryProvider>();
+    final hasCover = book.coverPath != null && File(book.coverPath!).existsSync();
+    final progressFraction = book.totalChaptersOrPages > 0
+        ? ((book.currentChapterOrPage + 1) / book.totalChaptersOrPages).clamp(0.0, 1.0)
+        : 0.0;
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkCard : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+            spreadRadius: 1,
+          ),
+        ],
+        border: Border.all(
+          color: isDark ? AppTheme.darkDivider : const Color(0xFFEFE8E9),
+          width: 1,
+        ),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () {
@@ -290,86 +310,114 @@ class _HomeScreenState extends State<HomeScreen> {
           });
         },
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Cover: Real cover image if extracted, otherwise pastel placeholder
+            // Cover Image with JW Library proportions
             Expanded(
-              flex: 3,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  gradient: (book.coverPath != null && File(book.coverPath!).existsSync())
-                      ? null
-                      : LinearGradient(
+              flex: 14,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (hasCover)
+                    Image.file(
+                      File(book.coverPath!),
+                      fit: BoxFit.cover,
+                    )
+                  else
+                    Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
-                            AppTheme.primaryPink.withValues(alpha: 0.35),
-                            AppTheme.accentPeach.withValues(alpha: 0.4),
+                            AppTheme.primaryPink.withValues(alpha: 0.4),
+                            AppTheme.accentPeach.withValues(alpha: 0.45),
                           ],
                         ),
-                  image: (book.coverPath != null && File(book.coverPath!).existsSync())
-                      ? DecorationImage(
-                          image: FileImage(File(book.coverPath!)),
-                          fit: BoxFit.cover,
-                        )
-                      : null,
-                ),
-                child: Stack(
-                  children: [
-                    if (book.coverPath == null || !File(book.coverPath!).existsSync())
-                      Center(
+                      ),
+                      child: Center(
                         child: Icon(
                           book.format == BookFormat.pdf
                               ? Icons.picture_as_pdf_rounded
                               : Icons.menu_book_rounded,
-                          size: 44,
-                          color: AppTheme.primaryPinkDark.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    // Format badge
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: _getFormatBadgeColor(book.format),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          book.format.name.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          size: 42,
+                          color: AppTheme.primaryPinkDark.withValues(alpha: 0.85),
                         ),
                       ),
                     ),
-                    // Favorite button
-                    Positioned(
-                      top: 4,
-                      left: 4,
+
+                  // Format Pill Badge (JW Library style)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                      decoration: BoxDecoration(
+                        color: _getFormatBadgeColor(book.format).withValues(alpha: 0.92),
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        book.format.name.toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Favorite Heart Action
+                  Positioned(
+                    top: 4,
+                    left: 4,
+                    child: Material(
+                      color: Colors.transparent,
                       child: IconButton(
                         icon: Icon(
                           book.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          color: book.isFavorite ? Colors.redAccent : Colors.black38,
+                          color: book.isFavorite ? Colors.redAccent : Colors.black45,
                           size: 20,
                         ),
                         onPressed: () => library.toggleFavorite(book.id),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+
+                  // Thin Progress Bar indicator at the bottom of the cover
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      height: 3,
+                      color: Colors.black.withValues(alpha: 0.15),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: progressFraction,
+                        child: Container(
+                          color: AppTheme.primaryPinkDark,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            // Book details
+            // Book Details (JW Library typographic layout)
             Expanded(
-              flex: 2,
+              flex: 9,
               child: Padding(
-                padding: const EdgeInsets.all(10),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -381,9 +429,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           book.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            height: 1.25,
+                          ),
                         ),
-                        const SizedBox(height: 2),
+                        const SizedBox(height: 3),
                         Text(
                           book.author,
                           maxLines: 1,
@@ -397,22 +449,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          'Глава ${book.currentChapterOrPage + 1}',
-                          style: const TextStyle(
+                          'Глава ${book.currentChapterOrPage + 1} из ${book.totalChaptersOrPages}',
+                          style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: AppTheme.primaryPinkDark,
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.more_vert_rounded, size: 16),
+                          icon: const Icon(Icons.more_vert_rounded, size: 17),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          onPressed: () {
-                            _showBookOptions(context, book);
-                          },
+                          onPressed: () => _showBookOptions(context, book),
                         ),
                       ],
                     ),

@@ -87,7 +87,7 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: ReaderColorPreset.values.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  separatorBuilder: (context, index) => const SizedBox(width: 8),
                   itemBuilder: (ctx, idx) {
                     final preset = ReaderColorPreset.values[idx];
                     final isSelected = !settings.isCustomColors && settings.colorPreset == preset;
@@ -140,10 +140,10 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: customBgOptions.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  separatorBuilder: (context, index) => const SizedBox(width: 10),
                   itemBuilder: (ctx, idx) {
                     final color = customBgOptions[idx];
-                    final isSelected = settings.isCustomColors && settings.activeBackground.value == color.value;
+                    final isSelected = settings.isCustomColors && settings.activeBackground.toARGB32() == color.toARGB32();
                     return InkWell(
                       onTap: () => reader.setCustomColors(background: color),
                       child: Container(
@@ -171,10 +171,10 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   itemCount: customTextOptions.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 10),
+                  separatorBuilder: (context, index) => const SizedBox(width: 10),
                   itemBuilder: (ctx, idx) {
                     final color = customTextOptions[idx];
-                    final isSelected = settings.isCustomColors && settings.activeText.value == color.value;
+                    final isSelected = settings.isCustomColors && settings.activeText.toARGB32() == color.toARGB32();
                     return InkWell(
                       onTap: () => reader.setCustomColors(text: color),
                       child: Container(
