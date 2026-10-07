@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
@@ -66,11 +67,31 @@ class LibraryProvider extends ChangeNotifier {
     try {
       _books = await _dbHelper.getBooks();
       _shelves = await _dbHelper.getShelves();
+
+      // Auto-heal missing covers for existing books
+      _healMissingCovers();
     } catch (e) {
       debugPrint('Error loading library: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _healMissingCovers() async {
+    for (int i = 0; i < _books.length; i++) {
+      final book = _books[i];
+      final coverExists = book.coverPath != null && File(book.coverPath!).existsSync();
+      if (!coverExists && (book.format == BookFormat.epub || book.format == BookFormat.fb2)) {
+        try {
+          final newCoverPath = await BookParserService.extractCoverForBook(book);
+          if (newCoverPath != null && File(newCoverPath).existsSync()) {
+            await _dbHelper.updateBookDetails(book.id, coverPath: newCoverPath);
+            _books[i] = book.copyWith(coverPath: newCoverPath);
+            notifyListeners();
+          }
+        } catch (_) {}
+      }
     }
   }
 

@@ -157,6 +157,17 @@ class DatabaseHelper {
     await db.insert('books', book.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  Future<void> updateBookDetails(String id, {String? title, String? author, String? coverPath}) async {
+    final db = await database;
+    final Map<String, dynamic> values = {};
+    if (title != null) values['title'] = title;
+    if (author != null) values['author'] = author;
+    if (coverPath != null) values['coverPath'] = coverPath;
+    if (values.isNotEmpty) {
+      await db.update('books', values, where: 'id = ?', whereArgs: [id]);
+    }
+  }
+
   Future<void> updateBookProgress(String id, int chapter, double scrollProgress) async {
     final db = await database;
     await db.update(

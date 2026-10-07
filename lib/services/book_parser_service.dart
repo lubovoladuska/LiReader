@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
@@ -57,6 +58,7 @@ class BookParserService {
       title = parsed.title.isNotEmpty ? parsed.title : fileName;
       author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
       totalUnits = parsed.chapters.length;
+      coverPath = await _extractFb2Cover(filePath);
     } else if (ext == '.txt') {
       format = BookFormat.txt;
       final parsed = await parseTxt(filePath);
@@ -84,33 +86,168 @@ class BookParserService {
     );
   }
 
+  static Future<Directory> _getCoversDirectory() async {
+    final userProfile = Platform.environment['USERPROFILE'] ?? Platform.environment['APPDATA'] ?? '.';
+    final baseDocs = p.join(userProfile, 'Documents', 'LiReader', 'covers');
+    final dir = Directory(baseDocs);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return dir;
+  }
+
   static Future<String?> _extractEpubCover(String filePath) async {
     try {
       final bytes = await File(filePath).readAsBytes();
       final archive = ZipDecoder().decodeBytes(bytes);
 
-      // Search for cover image file in zip
-      final coverFile = archive.files.firstWhere(
-        (f) {
-          final n = f.name.toLowerCase();
-          return (n.contains('cover') || n.contains('titlepage')) &&
-              (n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png'));
-        },
-        orElse: () => archive.files.firstWhere(
-          (f) => f.name.endsWith('.jpg') || f.name.endsWith('.png'),
-          orElse: () => archive.files.first,
-        ),
+      // 1. First locate OPF file via META-INF/container.xml
+      final containerFile = archive.findFile('META-INF/container.xml');
+      String? opfPath;
+      if (containerFile != null) {
+        try {
+          final cXml = XmlDocument.parse(utf8.decode(containerFile.content as List<int>, allowMalformed: true));
+          final rootfile = cXml.findAllElements('rootfile').firstOrNull;
+          opfPath = rootfile?.getAttribute('full-path');
+        } catch (_) {}
+      }
+      opfPath ??= 'content.opf';
+      final opfFile = archive.findFile(opfPath) ?? archive.files.firstWhere(
+        (f) => f.name.endsWith('.opf'),
+        orElse: () => archive.files.first,
       );
 
-      if (coverFile.name.endsWith('.jpg') || coverFile.name.endsWith('.jpeg') || coverFile.name.endsWith('.png')) {
-        final cacheDir = Directory(p.join(p.dirname(filePath), '.covers'));
-        if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+      String opfDir = p.dirname(opfFile.name);
+      if (opfDir == '.') opfDir = '';
 
-        final targetPath = p.join(cacheDir.path, '${p.basenameWithoutExtension(filePath)}_cover.jpg');
-        await File(targetPath).writeAsBytes(coverFile.content as List<int>);
+      ArchiveFile? coverArchiveFile;
+
+      if (opfFile.name.endsWith('.opf')) {
+        try {
+          final opfXml = XmlDocument.parse(utf8.decode(opfFile.content as List<int>, allowMalformed: true));
+          
+          // Look for <meta name="cover" content="item_id"/>
+          String? coverItemId;
+          for (final meta in opfXml.findAllElements('meta')) {
+            if (meta.getAttribute('name')?.toLowerCase() == 'cover') {
+              coverItemId = meta.getAttribute('content');
+              break;
+            }
+          }
+
+          // Map manifest items
+          final manifestItems = <String, String>{};
+          for (final item in opfXml.findAllElements('item')) {
+            final id = item.getAttribute('id');
+            final href = item.getAttribute('href');
+            if (id != null && href != null) {
+              manifestItems[id] = href;
+              // Check if properties="cover-image" (EPUB 3 standard)
+              final properties = item.getAttribute('properties');
+              if (properties != null && properties.contains('cover-image')) {
+                coverItemId = id;
+              }
+            }
+          }
+
+          if (coverItemId != null && manifestItems.containsKey(coverItemId)) {
+            final href = Uri.decodeFull(manifestItems[coverItemId]!);
+            final fullCoverPath = opfDir.isEmpty ? href : p.join(opfDir, href).replaceAll(r'\', '/');
+            coverArchiveFile = archive.findFile(fullCoverPath);
+          }
+        } catch (_) {}
+      }
+
+      // 2. Fallback heuristic: search for file containing cover/titlepage in filename
+      if (coverArchiveFile == null) {
+        for (final f in archive.files) {
+          final n = f.name.toLowerCase();
+          if ((n.contains('cover') || n.contains('titlepage')) &&
+              (n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png'))) {
+            coverArchiveFile = f;
+            break;
+          }
+        }
+      }
+
+      // 3. Last fallback: any image file
+      if (coverArchiveFile == null) {
+        for (final f in archive.files) {
+          final n = f.name.toLowerCase();
+          if (n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png')) {
+            coverArchiveFile = f;
+            break;
+          }
+        }
+      }
+
+      if (coverArchiveFile != null) {
+        final coversDir = await _getCoversDirectory();
+        final ext = p.extension(coverArchiveFile.name).isNotEmpty ? p.extension(coverArchiveFile.name) : '.jpg';
+        final targetPath = p.join(coversDir.path, '${p.basenameWithoutExtension(filePath)}_cover$ext');
+        await File(targetPath).writeAsBytes(coverArchiveFile.content as List<int>);
         return targetPath;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Error extracting EPUB cover: $e');
+    }
+    return null;
+  }
+
+  static Future<String?> _extractFb2Cover(String filePath) async {
+    try {
+      final bytes = await File(filePath).readAsBytes();
+      final content = utf8.decode(bytes, allowMalformed: true);
+      final xml = XmlDocument.parse(content);
+
+      // Find coverpage image reference in title-info
+      final coverpage = xml.findAllElements('coverpage').firstOrNull;
+      String? imageId;
+      if (coverpage != null) {
+        final imageElem = coverpage.findAllElements('image').firstOrNull;
+        if (imageElem != null) {
+          final href = imageElem.getAttribute('l:href') ?? imageElem.getAttribute('xlink:href') ?? imageElem.getAttribute('href');
+          if (href != null) {
+            imageId = href.startsWith('#') ? href.substring(1) : href;
+          }
+        }
+      }
+
+      // Look in binary tags
+      final binaries = xml.findAllElements('binary');
+      for (final bin in binaries) {
+        final id = bin.getAttribute('id');
+        if (imageId != null && id == imageId) {
+          final base64Data = bin.innerText.replaceAll(RegExp(r'\s+'), '');
+          final imgBytes = base64Decode(base64Data);
+          final coversDir = await _getCoversDirectory();
+          final targetPath = p.join(coversDir.path, '${p.basenameWithoutExtension(filePath)}_cover.jpg');
+          await File(targetPath).writeAsBytes(imgBytes);
+          return targetPath;
+        }
+      }
+
+      // If specific cover not matched, pick first binary
+      if (binaries.isNotEmpty) {
+        final base64Data = binaries.first.innerText.replaceAll(RegExp(r'\s+'), '');
+        final imgBytes = base64Decode(base64Data);
+        final coversDir = await _getCoversDirectory();
+        final targetPath = p.join(coversDir.path, '${p.basenameWithoutExtension(filePath)}_cover.jpg');
+        await File(targetPath).writeAsBytes(imgBytes);
+        return targetPath;
+      }
+    } catch (e) {
+      debugPrint('Error extracting FB2 cover: $e');
+    }
+    return null;
+  }
+
+  static Future<String?> extractCoverForBook(BookItem book) async {
+    if (book.format == BookFormat.epub) {
+      return await _extractEpubCover(book.filePath);
+    } else if (book.format == BookFormat.fb2) {
+      return await _extractFb2Cover(book.filePath);
+    }
     return null;
   }
 
