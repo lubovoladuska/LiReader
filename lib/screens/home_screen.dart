@@ -221,8 +221,73 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
 
+                // Format Filter Chips
+                SingleChildScrollView(
+
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: Row(
+                    children: [
+                      _buildFormatChip(
+                        context: context,
+                        label: 'Все форматы',
+                        icon: Icons.all_inclusive_rounded,
+                        isSelected: library.selectedFormat == null,
+                        count: library.allBooks.length,
+                        onSelected: () => library.setFormatFilter(null),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFormatChip(
+                        context: context,
+                        label: 'EPUB',
+                        icon: Icons.book_rounded,
+                        isSelected: library.selectedFormat == BookFormat.epub,
+                        count: library.allBooks.where((b) => b.format == BookFormat.epub).length,
+                        onSelected: () => library.setFormatFilter(
+                          library.selectedFormat == BookFormat.epub ? null : BookFormat.epub,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFormatChip(
+                        context: context,
+                        label: 'FB2',
+                        icon: Icons.collections_bookmark_rounded,
+                        isSelected: library.selectedFormat == BookFormat.fb2,
+                        count: library.allBooks.where((b) => b.format == BookFormat.fb2).length,
+                        onSelected: () => library.setFormatFilter(
+                          library.selectedFormat == BookFormat.fb2 ? null : BookFormat.fb2,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFormatChip(
+                        context: context,
+                        label: 'PDF',
+                        icon: Icons.picture_as_pdf_rounded,
+                        isSelected: library.selectedFormat == BookFormat.pdf,
+                        count: library.allBooks.where((b) => b.format == BookFormat.pdf).length,
+                        onSelected: () => library.setFormatFilter(
+                          library.selectedFormat == BookFormat.pdf ? null : BookFormat.pdf,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildFormatChip(
+                        context: context,
+                        label: 'TXT / MD',
+                        icon: Icons.description_rounded,
+                        isSelected: library.selectedFormat == BookFormat.txt,
+                        count: library.allBooks.where((b) => b.format == BookFormat.txt || b.format == BookFormat.markdown).length,
+                        onSelected: () => library.setFormatFilter(
+                          library.selectedFormat == BookFormat.txt ? null : BookFormat.txt,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 6),
+
                 // Grid of books
                 Expanded(
+
                   child: library.isLoading
                       ? const Center(child: CircularProgressIndicator())
                       : library.books.isEmpty
@@ -546,4 +611,50 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  Widget _buildFormatChip({
+    required BuildContext context,
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required int count,
+    required VoidCallback onSelected,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return FilterChip(
+      selected: isSelected,
+      showCheckmark: false,
+      avatar: Icon(
+        icon,
+        size: 16,
+        color: isSelected
+            ? Colors.white
+            : (isDark ? Colors.white70 : Colors.black87),
+      ),
+      label: Text(
+        '$label ($count)',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected
+              ? Colors.white
+              : (isDark ? Colors.white70 : Colors.black87),
+        ),
+      ),
+      selectedColor: AppTheme.primaryPinkDark,
+      backgroundColor: isDark ? AppTheme.darkSurface : const Color(0xFFF3ECEE),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: isSelected
+              ? AppTheme.primaryPinkDark
+              : (isDark ? Colors.white12 : Colors.black12),
+          width: 1,
+        ),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      onSelected: (_) => onSelected(),
+    );
+  }
 }
+

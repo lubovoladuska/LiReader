@@ -171,9 +171,81 @@ class ShelvesSidebar extends StatelessWidget {
                       onDelete: () => library.deleteShelf(shelf.id),
                     );
                   }),
+
+                const SizedBox(height: 20),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  child: Text(
+                    'ФОРМАТЫ КНИГ',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.8,
+                      color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                    ),
+                  ),
+                ),
+
+                _buildFormatItem(
+                  context: context,
+                  title: 'EPUB книги',
+                  icon: Icons.book_rounded,
+                  count: library.allBooks.where((b) => b.format == BookFormat.epub).length,
+                  isSelected: library.selectedFormat == BookFormat.epub,
+                  onTap: () {
+                    if (library.selectedFormat == BookFormat.epub) {
+                      library.setFormatFilter(null);
+                    } else {
+                      library.setFormatFilter(BookFormat.epub);
+                    }
+                  },
+                ),
+                _buildFormatItem(
+                  context: context,
+                  title: 'FB2 книги',
+                  icon: Icons.collections_bookmark_rounded,
+                  count: library.allBooks.where((b) => b.format == BookFormat.fb2).length,
+                  isSelected: library.selectedFormat == BookFormat.fb2,
+                  onTap: () {
+                    if (library.selectedFormat == BookFormat.fb2) {
+                      library.setFormatFilter(null);
+                    } else {
+                      library.setFormatFilter(BookFormat.fb2);
+                    }
+                  },
+                ),
+                _buildFormatItem(
+                  context: context,
+                  title: 'PDF документы',
+                  icon: Icons.picture_as_pdf_rounded,
+                  count: library.allBooks.where((b) => b.format == BookFormat.pdf).length,
+                  isSelected: library.selectedFormat == BookFormat.pdf,
+                  onTap: () {
+                    if (library.selectedFormat == BookFormat.pdf) {
+                      library.setFormatFilter(null);
+                    } else {
+                      library.setFormatFilter(BookFormat.pdf);
+                    }
+                  },
+                ),
+                _buildFormatItem(
+                  context: context,
+                  title: 'Текст (TXT / MD)',
+                  icon: Icons.description_rounded,
+                  count: library.allBooks.where((b) => b.format == BookFormat.txt || b.format == BookFormat.markdown).length,
+                  isSelected: library.selectedFormat == BookFormat.txt,
+                  onTap: () {
+                    if (library.selectedFormat == BookFormat.txt) {
+                      library.setFormatFilter(null);
+                    } else {
+                      library.setFormatFilter(BookFormat.txt);
+                    }
+                  },
+                ),
               ],
             ),
           ),
+
         ],
       ),
     ),
@@ -293,5 +365,65 @@ class ShelvesSidebar extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildFormatItem({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required int count,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? AppTheme.primaryPink.withValues(alpha: isDark ? 0.25 : 0.2)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: ListTile(
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        leading: Icon(
+          icon,
+          size: 19,
+          color: isSelected
+              ? AppTheme.primaryPinkDark
+              : (isDark ? Colors.white70 : Colors.black87),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+            color: isSelected ? AppTheme.primaryPinkDark : null,
+          ),
+        ),
+        trailing: count > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppTheme.primaryPinkDark.withValues(alpha: 0.15)
+                      : (isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.05)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: isSelected ? AppTheme.primaryPinkDark : Colors.grey,
+                  ),
+                ),
+              )
+            : null,
+        onTap: onTap,
+      ),
+    );
+  }
 }
+
 

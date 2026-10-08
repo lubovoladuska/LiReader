@@ -23,6 +23,7 @@ class LibraryProvider extends ChangeNotifier {
   String _searchQuery = '';
   LibraryFilter _activeFilter = LibraryFilter.all;
   String? _selectedShelfId;
+  BookFormat? _selectedFormat;
 
   List<BookItem> get allBooks => _books;
   List<ShelfItem> get shelves => _shelves;
@@ -30,6 +31,7 @@ class LibraryProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
   LibraryFilter get activeFilter => _activeFilter;
   String? get selectedShelfId => _selectedShelfId;
+  BookFormat? get selectedFormat => _selectedFormat;
 
   ShelfItem? get activeShelf {
     if (_selectedShelfId == null) return null;
@@ -53,6 +55,14 @@ class LibraryProvider extends ChangeNotifier {
         break;
     }
 
+    if (_selectedFormat != null) {
+      if (_selectedFormat == BookFormat.txt) {
+        filtered = filtered.where((b) => b.format == BookFormat.txt || b.format == BookFormat.markdown).toList();
+      } else {
+        filtered = filtered.where((b) => b.format == _selectedFormat).toList();
+      }
+    }
+
     if (_searchQuery.trim().isNotEmpty) {
       final q = _searchQuery.toLowerCase();
       filtered = filtered.where((b) => b.title.toLowerCase().contains(q) || b.author.toLowerCase().contains(q)).toList();
@@ -60,6 +70,7 @@ class LibraryProvider extends ChangeNotifier {
 
     return filtered;
   }
+
 
   Future<void> loadLibrary() async {
     _isLoading = true;
@@ -101,7 +112,13 @@ class LibraryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setFormatFilter(BookFormat? format) {
+    _selectedFormat = format;
+    notifyListeners();
+  }
+
   void setSearchQuery(String query) {
+
     _searchQuery = query;
     notifyListeners();
   }

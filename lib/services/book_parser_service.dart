@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:xml/xml.dart';
 import '../models/book_item.dart';
@@ -87,9 +88,16 @@ class BookParserService {
   }
 
   static Future<Directory> _getCoversDirectory() async {
-    final userProfile = Platform.environment['USERPROFILE'] ?? Platform.environment['APPDATA'] ?? '.';
-    final baseDocs = p.join(userProfile, 'Documents', 'LiReader', 'covers');
-    final dir = Directory(baseDocs);
+    String baseDirPath;
+    try {
+      final appDocsDir = await getApplicationDocumentsDirectory();
+      baseDirPath = appDocsDir.path;
+    } catch (_) {
+      final userProfile = Platform.environment['USERPROFILE'] ?? Platform.environment['APPDATA'] ?? '.';
+      baseDirPath = p.join(userProfile, 'Documents');
+    }
+    final coversDirPath = p.join(baseDirPath, 'LiReader', 'covers');
+    final dir = Directory(coversDirPath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }
