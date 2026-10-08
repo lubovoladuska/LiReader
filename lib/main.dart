@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -25,6 +26,18 @@ void main() async {
   );
 }
 
+class LiReaderScrollBehavior extends MaterialScrollBehavior {
+  const LiReaderScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
+}
+
 class LiReaderApp extends StatelessWidget {
   const LiReaderApp({super.key});
 
@@ -33,6 +46,7 @@ class LiReaderApp extends StatelessWidget {
     return MaterialApp(
       title: 'LiReader',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const LiReaderScrollBehavior(),
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
@@ -40,3 +54,4 @@ class LiReaderApp extends StatelessWidget {
     );
   }
 }
+

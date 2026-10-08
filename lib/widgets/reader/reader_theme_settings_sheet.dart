@@ -158,43 +158,46 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
               // 1. Color Presets
               const Text('ЦВЕТОВЫЕ ТЕМЫ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: Colors.grey)),
               const SizedBox(height: 10),
-              SizedBox(
-                height: 48,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: ReaderColorPreset.values.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 8),
-                  itemBuilder: (ctx, idx) {
-                    final preset = ReaderColorPreset.values[idx];
-                    final isSelected = !settings.isCustomColors && settings.colorPreset == preset;
-
-                    return InkWell(
-                      onTap: () => reader.setColorPreset(preset),
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: preset.backgroundColor,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: isSelected ? AppTheme.primaryPinkDark : Colors.black12,
-                            width: isSelected ? 2.5 : 1,
-                          ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: ReaderColorPreset.values.map((preset) {
+                  final isSelected = !settings.isCustomColors && settings.colorPreset == preset;
+                  return InkWell(
+                    onTap: () => reader.setColorPreset(preset),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: preset.backgroundColor,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isSelected ? AppTheme.primaryPinkDark : Colors.black12,
+                          width: isSelected ? 2.5 : 1,
                         ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          preset.label,
-                          style: TextStyle(
-                            color: preset.textColor,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-                            fontSize: 13,
-                          ),
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: AppTheme.primaryPinkDark.withValues(alpha: 0.3),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
+                      ),
+                      child: Text(
+                        preset.label,
+                        style: TextStyle(
+                          color: preset.textColor,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                          fontSize: 13,
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                }).toList(),
               ),
+
 
               const SizedBox(height: 20),
               // Custom Color Pickers
@@ -211,64 +214,57 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              SizedBox(
-                height: 36,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: customBgOptions.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 10),
-                  itemBuilder: (ctx, idx) {
-                    final color = customBgOptions[idx];
-                    final isSelected = settings.isCustomColors && settings.activeBackground.toARGB32() == color.toARGB32();
-                    return InkWell(
-                      onTap: () => reader.setCustomColors(background: color),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? AppTheme.primaryPinkDark : Colors.black26,
-                            width: isSelected ? 3 : 1,
-                          ),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: customBgOptions.map((color) {
+                  final isSelected = settings.isCustomColors && settings.activeBackground.toARGB32() == color.toARGB32();
+                  return InkWell(
+                    onTap: () => reader.setCustomColors(background: color),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? AppTheme.primaryPinkDark : Colors.black26,
+                          width: isSelected ? 3 : 1,
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                }).toList(),
               ),
 
               const SizedBox(height: 14),
               const Text('Пользовательский цвет текста:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
-              SizedBox(
-                height: 36,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: customTextOptions.length,
-                  separatorBuilder: (context, index) => const SizedBox(width: 10),
-                  itemBuilder: (ctx, idx) {
-                    final color = customTextOptions[idx];
-                    final isSelected = settings.isCustomColors && settings.activeText.toARGB32() == color.toARGB32();
-                    return InkWell(
-                      onTap: () => reader.setCustomColors(text: color),
-                      child: Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? AppTheme.primaryPinkDark : Colors.black26,
-                            width: isSelected ? 3 : 1,
-                          ),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: customTextOptions.map((color) {
+                  final isSelected = settings.isCustomColors && settings.activeText.toARGB32() == color.toARGB32();
+                  return InkWell(
+                    onTap: () => reader.setCustomColors(text: color),
+                    borderRadius: BorderRadius.circular(16),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: isSelected ? AppTheme.primaryPinkDark : Colors.black26,
+                          width: isSelected ? 3 : 1,
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                }).toList(),
               ),
+
 
               const SizedBox(height: 24),
               const Divider(height: 1),
