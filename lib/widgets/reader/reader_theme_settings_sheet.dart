@@ -36,17 +36,21 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = reader.themeSettings;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? AppTheme.darkSurface : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      child: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+    return ListenableBuilder(
+      listenable: reader,
+      builder: (context, _) {
+        final settings = reader.themeSettings;
+
+        return Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkSurface : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -386,5 +390,8 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
         ),
       ),
     );
+      },
+    );
   }
 }
+
