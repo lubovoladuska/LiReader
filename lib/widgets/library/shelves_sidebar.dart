@@ -61,10 +61,11 @@ class ShelvesSidebar extends StatelessWidget {
           ),
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header / Logo Area
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header / Logo Area
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
             child: Row(
@@ -175,8 +176,9 @@ class ShelvesSidebar extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildNavItem({
     required BuildContext context,
@@ -292,3 +294,4 @@ class ShelvesSidebar extends StatelessWidget {
     );
   }
 }
+

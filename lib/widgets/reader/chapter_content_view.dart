@@ -310,25 +310,22 @@ class _ChapterContentViewState extends State<ChapterContentView> {
 
     final chapterHighlights = reader.highlights.where((h) => h.chapterIndex == widget.chapterIndex).toList();
 
-    return GestureDetector(
-      onTap: () {
-        reader.toggleMenu();
-      },
-      child: Container(
-        color: settings.activeBackground,
-        width: double.infinity,
-        height: double.infinity,
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 860),
-            child: Scrollbar(
+    return Container(
+      color: settings.activeBackground,
+      width: double.infinity,
+      height: double.infinity,
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 860),
+          child: Scrollbar(
+            controller: _scrollController,
+            child: SingleChildScrollView(
               controller: _scrollController,
-              child: SingleChildScrollView(
-                controller: _scrollController,
-                padding: EdgeInsets.symmetric(
-                  horizontal: settings.horizontalPadding,
-                  vertical: 36,
-                ),
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: EdgeInsets.symmetric(
+                horizontal: settings.horizontalPadding,
+                vertical: 36,
+              ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -428,9 +425,8 @@ class _ChapterContentViewState extends State<ChapterContentView> {
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 }
 
 class _HighlightInterval {

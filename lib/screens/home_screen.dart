@@ -115,56 +115,82 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // Main Books Content
           Expanded(
-            child: Column(
-              children: [
-                // Top App Bar
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppTheme.darkBg : AppTheme.lightBg,
-                    border: Border(
-                      bottom: BorderSide(
-                        color: isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
-                        width: 1,
+            child: SafeArea(
+              child: Column(
+                children: [
+                  // Top App Bar
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.darkBg : AppTheme.lightBg,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
+                          width: 1,
+                        ),
                       ),
                     ),
-                  ),
-                  child: Row(
-                    children: [
-                      if (!isDesktop)
-                        Builder(
-                          builder: (ctx) => IconButton(
-                            icon: const Icon(Icons.menu_rounded),
-                            onPressed: () => Scaffold.of(ctx).openDrawer(),
+                    child: Row(
+                      children: [
+                        if (!isDesktop)
+                          Builder(
+                            builder: (ctx) => IconButton(
+                              icon: const Icon(Icons.menu_rounded),
+                              padding: const EdgeInsets.only(right: 8),
+                              constraints: const BoxConstraints(),
+                              onPressed: () => Scaffold.of(ctx).openDrawer(),
+                            ),
+                          ),
+                        Expanded(
+                          child: Text(
+                            currentCategoryTitle,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      Text(
-                        currentCategoryTitle,
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      // Add Book button
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppTheme.primaryPinkDark,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        ),
-                        icon: const Icon(Icons.add_rounded, size: 20),
-                        label: const Text('Добавить книгу'),
-                        onPressed: () async {
-                          final newBook = await library.pickAndAddBook();
-                          if (newBook != null && context.mounted) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => ReaderScreen(book: newBook)),
-                            );
-                          }
-                        },
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        // Add Book button (icon-only on small screens, full button on desktop/tablet)
+                        if (isDesktop)
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppTheme.primaryPinkDark,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            ),
+                            icon: const Icon(Icons.add_rounded, size: 20),
+                            label: const Text('Добавить книгу'),
+                            onPressed: () async {
+                              final newBook = await library.pickAndAddBook();
+                              if (newBook != null && context.mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => ReaderScreen(book: newBook)),
+                                );
+                              }
+                            },
+                          )
+                        else
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppTheme.primaryPinkDark,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            ),
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                            label: const Text('Добавить', style: TextStyle(fontSize: 13)),
+                            onPressed: () async {
+                              final newBook = await library.pickAndAddBook();
+                              if (newBook != null && context.mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => ReaderScreen(book: newBook)),
+                                );
+                              }
+                            },
+                          ),
+                      ],
+                    ),
                   ),
-                ),
 
                 // Search Bar
                 Padding(
@@ -270,10 +296,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildBookCard(BuildContext context, BookItem book, bool isDark) {
     final library = context.read<LibraryProvider>();

@@ -79,6 +79,78 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
+              // Live Real-Time Typography & Theme Preview Card
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(
+                  horizontal: (settings.horizontalPadding * 0.6).clamp(12.0, 32.0),
+                  vertical: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: settings.activeBackground,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.08),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF443D41) : const Color(0xFFE2D9DC),
+                    width: 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Живой предпросмотр',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                            color: settings.activeText.withValues(alpha: 0.6),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryPinkDark.withValues(alpha: 0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            settings.isCustomColors ? 'Своя палитра' : settings.colorPreset.label,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryPinkDark,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '«Книга — это мечта, которую вы держите в руках.»',
+                      textAlign: settings.textAlign,
+                      style: TextStyle(
+                        fontFamily: settings.fontFamily.fontFamily,
+                        fontSize: settings.fontSize * 0.95,
+                        height: settings.lineHeight,
+                        letterSpacing: settings.letterSpacing,
+                        color: settings.activeText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
               // 1. Color Presets
               const Text('ЦВЕТОВЫЕ ТЕМЫ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.8, color: Colors.grey)),
               const SizedBox(height: 10),
@@ -107,7 +179,7 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
                         ),
                         alignment: Alignment.center,
                         child: Text(
-                          preset.label.split(' ').first,
+                          preset.label,
                           style: TextStyle(
                             color: preset.textColor,
                             fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,

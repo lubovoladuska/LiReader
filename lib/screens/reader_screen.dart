@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/book_item.dart';
 import '../providers/library_provider.dart';
 import '../providers/reader_provider.dart';
+import '../theme/app_theme.dart';
 import '../widgets/reader/book_notes_sidebar.dart';
 import '../widgets/reader/chapter_content_view.dart';
 import '../widgets/reader/chapter_picker_dialog.dart';
@@ -118,24 +119,43 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       ),
                     ),
                     actions: [
+                      // Prominent button for Notes and Quotes
+                      Builder(
+                        builder: (ctx) => FilledButton.tonalIcon(
+                          style: FilledButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            backgroundColor: AppTheme.primaryPink.withValues(alpha: 0.25),
+                          ),
+                          icon: const Icon(Icons.format_quote_rounded, size: 18, color: AppTheme.primaryPinkDark),
+                          label: Text(
+                            reader.highlights.isNotEmpty ? 'Цитаты (${reader.highlights.length})' : 'Цитаты',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.primaryPinkDark,
+                            ),
+                          ),
+                          onPressed: () => Scaffold.of(ctx).openEndDrawer(),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+
+                      // Theme & Typography Settings
                       if (widget.book.format != BookFormat.pdf)
                         IconButton(
                           icon: const Icon(Icons.tune_rounded),
                           tooltip: 'Оформление текста и темы',
                           onPressed: () => _showThemeSettings(context, reader),
                         ),
-                      Builder(
-                        builder: (ctx) => IconButton(
-                          icon: const Icon(Icons.bookmark_border_rounded),
-                          tooltip: 'Заметки и цитаты',
-                          onPressed: () => Scaffold.of(ctx).openEndDrawer(),
-                        ),
-                      ),
+
+                      // Fullscreen toggle
                       IconButton(
                         icon: const Icon(Icons.fullscreen_rounded),
-                        tooltip: 'Скрыть панели (полноэкранный режим)',
+                        tooltip: 'Полноэкранный режим (скрыть панели)',
                         onPressed: () => reader.setMenuVisible(false),
                       ),
+                      const SizedBox(width: 4),
                     ],
                   )
                 : null,
@@ -168,15 +188,52 @@ class _ReaderScreenState extends State<ReaderScreen> {
                       // Floating restore button when AppBar is hidden (Immersive mode)
                       if (!reader.isMenuVisible)
                         Positioned(
-                          top: 16,
-                          right: 16,
-                          child: FloatingActionButton.small(
-                            heroTag: 'showMenuBtn',
-                            elevation: 3,
-                            backgroundColor: Theme.of(context).cardColor.withValues(alpha: 0.85),
-                            tooltip: 'Показать меню',
-                            child: const Icon(Icons.fullscreen_exit_rounded, size: 22),
-                            onPressed: () => reader.setMenuVisible(true),
+                          top: 0,
+                          right: 0,
+                          child: SafeArea(
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 8, right: 12),
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(20),
+                                  onTap: () => reader.setMenuVisible(true),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).cardColor.withValues(alpha: 0.8),
+                                      borderRadius: BorderRadius.circular(20),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: 0.15),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                      border: Border.all(
+                                        color: AppTheme.primaryPinkDark.withValues(alpha: 0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.fullscreen_exit_rounded, size: 18, color: AppTheme.primaryPinkDark),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Меню',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.primaryPinkDark,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
 
