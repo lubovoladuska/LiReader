@@ -11,17 +11,22 @@ class ChapterContentView extends StatefulWidget {
   final int chapterIndex;
   final String title;
   final String content;
+  final VoidCallback? onNextChapter;
+  final VoidCallback? onPreviousChapter;
 
   const ChapterContentView({
     super.key,
     required this.chapterIndex,
     required this.title,
     required this.content,
+    this.onNextChapter,
+    this.onPreviousChapter,
   });
 
   @override
   State<ChapterContentView> createState() => _ChapterContentViewState();
 }
+
 
 class _ChapterContentViewState extends State<ChapterContentView> {
   final ScrollController _scrollController = ScrollController();
@@ -417,10 +422,63 @@ class _ChapterContentViewState extends State<ChapterContentView> {
                     },
                   ),
 
+                  // Bottom navigation for chapters
+                  const SizedBox(height: 36),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: settings.activeBackground == const Color(0xFF0F0E0F) || settings.activeBackground == const Color(0xFF242023)
+                          ? Colors.white.withValues(alpha: 0.05)
+                          : Colors.black.withValues(alpha: 0.03),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: settings.activeText.withValues(alpha: 0.12),
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (widget.onPreviousChapter != null)
+                          TextButton.icon(
+                            style: TextButton.styleFrom(
+                              foregroundColor: settings.activeText.withValues(alpha: 0.8),
+                            ),
+                            icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                            label: const Text('Предыдущая глава', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            onPressed: widget.onPreviousChapter,
+                          )
+                        else
+                          const SizedBox.shrink(),
+                        if (widget.onNextChapter != null)
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: AppTheme.primaryPinkDark,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            ),
+                            icon: const Icon(Icons.arrow_forward_rounded, size: 18),
+                            label: const Text('Следующая глава', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                            onPressed: widget.onNextChapter,
+                          )
+                        else
+                          Text(
+                            'Конец книги',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: settings.activeText.withValues(alpha: 0.5),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+
                   // Bottom spacer for comfortable reading
                   const SizedBox(height: 80),
                 ],
               ),
+
             ),
           ),
         ),

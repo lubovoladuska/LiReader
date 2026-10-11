@@ -185,9 +185,10 @@ class _ReaderScreenState extends State<ReaderScreen> {
                   )
                 : Stack(
                     children: [
-                      // Horizontal PageView for Chapters
+                      // Horizontal PageView for Chapters (pure vertical scroll inside chapters, transitions via next/prev buttons)
                       PageView.builder(
                         controller: _pageController,
+                        physics: const NeverScrollableScrollPhysics(),
                         itemCount: chapters.length,
                         onPageChanged: (idx) => _onPageChanged(idx, reader),
                         itemBuilder: (ctx, idx) {
@@ -196,9 +197,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
                             chapterIndex: idx,
                             title: chap.title,
                             content: chap.content,
+                            onPreviousChapter: idx > 0
+                                ? () {
+                                    _pageController.previousPage(
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  }
+                                : null,
+                            onNextChapter: idx < chapters.length - 1
+                                ? () {
+                                    _pageController.nextPage(
+                                      duration: const Duration(milliseconds: 300),
+                                      curve: Curves.easeInOut,
+                                    );
+                                  }
+                                : null,
                           );
                         },
                       ),
+
 
                       // Floating restore button when AppBar is hidden (Immersive mode)
                       if (!reader.isMenuVisible)
