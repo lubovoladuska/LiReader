@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -23,19 +24,37 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   late PageController _pageController;
+  Timer? _clockTimer;
+  String _currentTimeString = '';
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController(initialPage: widget.book.currentChapterOrPage);
+    _updateTime();
+    _clockTimer = Timer.periodic(const Duration(seconds: 30), (_) => _updateTime());
+  }
+
+  void _updateTime() {
+    final now = DateTime.now();
+    final hour = now.hour.toString().padLeft(2, '0');
+    final minute = now.minute.toString().padLeft(2, '0');
+    final newTime = '$hour:$minute';
+    if (_currentTimeString != newTime && mounted) {
+      setState(() {
+        _currentTimeString = newTime;
+      });
+    }
   }
 
   @override
   void dispose() {
+    _clockTimer?.cancel();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _pageController.dispose();
     super.dispose();
   }
+
 
   void _updateSystemUI(bool isMenuVisible) {
     if (isMenuVisible) {
@@ -314,9 +333,70 @@ class _ReaderScreenState extends State<ReaderScreen> {
                             ),
                           ),
                       ],
-                    ],
-                  ),
-          );
+
+                      // Subtle Reading Status Bar at bottom
+                      if (widget.book.format != BookFormat.pdf)
+                        Positioned(
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+
+                          child: IgnorePointer(
+                            child: SafeArea(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    // Current chapter info & chapter progress %
+                                    Text(
+                                      chapters.isNotEmpty
+                                          ? 'Гл. ${reader.currentChapterIndex + 1} из ${chapters.length} • ${(reader.chapterScrollProgress * 100).toInt()}%'
+                                          : '${(reader.chapterScrollProgress * 100).toInt()}%',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        color: reader.themeSettings.activeText.withValues(alpha: 0.45),
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+
+                                    // Total book progress & Current local time
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (chapters.isNotEmpty) ...[
+                                          Text(
+                                            'Книга: ${(((reader.currentChapterIndex + reader.chapterScrollProgress) / chapters.length) * 100).clamp(0, 100).toInt()}%',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: reader.themeSettings.activeText.withValues(alpha: 0.45),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                        ],
+                                        if (_currentTimeString.isNotEmpty)
+                                          Text(
+                                            _currentTimeString,
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: reader.themeSettings.activeText.withValues(alpha: 0.45),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+            );
+
         },
       ),
     );

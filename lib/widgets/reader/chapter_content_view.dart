@@ -54,10 +54,13 @@ class _ChapterContentViewState extends State<ChapterContentView> {
     if (_scrollController.hasClients) {
       final reader = context.read<ReaderProvider>();
       if (reader.currentChapterIndex == widget.chapterIndex) {
-        reader.saveScrollProgress(_scrollController.offset);
+        final max = _scrollController.position.maxScrollExtent;
+        final frac = max > 0 ? (_scrollController.offset / max).clamp(0.0, 1.0) : 1.0;
+        reader.saveScrollProgress(_scrollController.offset, fractional: frac);
       }
     }
   }
+
 
   @override
   void dispose() {

@@ -14,6 +14,7 @@ class ReaderProvider extends ChangeNotifier {
   bool _isLoading = true;
   BookParsedData? _parsedData;
   int _currentChapterIndex = 0;
+  double _chapterScrollProgress = 0.0;
   bool _isMenuVisible = true;
   List<BookHighlight> _highlights = [];
   ReaderThemeSettings _themeSettings = const ReaderThemeSettings();
@@ -26,7 +27,9 @@ class ReaderProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   BookParsedData? get parsedData => _parsedData;
   int get currentChapterIndex => _currentChapterIndex;
+  double get chapterScrollProgress => _chapterScrollProgress;
   bool get isMenuVisible => _isMenuVisible;
+
   List<BookHighlight> get highlights => _highlights;
   ReaderThemeSettings get themeSettings => _themeSettings;
 
@@ -91,9 +94,12 @@ class ReaderProvider extends ChangeNotifier {
     }
   }
 
-  void saveScrollProgress(double offset) {
+  void saveScrollProgress(double offset, {double fractional = 0.0}) {
+    _chapterScrollProgress = fractional.clamp(0.0, 1.0);
     _dbHelper.updateBookProgress(book.id, _currentChapterIndex, offset);
+    notifyListeners();
   }
+
 
   // --- Theme & Typography Settings ---
 
