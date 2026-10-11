@@ -47,7 +47,118 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _showAddBooksToShelfDialog(BuildContext context, ShelfItem shelf) {
+    final library = context.read<LibraryProvider>();
+    final availableBooks = library.allBooks.where((b) => b.shelfId != shelf.id).toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setState) {
+          final selectedBookIds = <String>{};
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.playlist_add_rounded, color: AppTheme.primaryPinkDark),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Добавить книги в «${shelf.name}»',
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 360,
+              height: 380,
+              child: availableBooks.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'Все книги из библиотеки уже находятся на этой полке',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: availableBooks.length,
+                      separatorBuilder: (context, index) => const Divider(height: 1),
+                      itemBuilder: (ctx, idx) {
+                        final book = availableBooks[idx];
+                        final isChecked = selectedBookIds.contains(book.id);
+
+                        return CheckboxListTile(
+                          value: isChecked,
+                          title: Text(
+                            book.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Text(
+                            book.author,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          secondary: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: _getFormatBadgeColor(book.format).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              book.format.name.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: _getFormatBadgeColor(book.format),
+                              ),
+                            ),
+                          ),
+
+                          activeColor: AppTheme.primaryPinkDark,
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                selectedBookIds.add(book.id);
+                              } else {
+                                selectedBookIds.remove(book.id);
+                              }
+                            });
+                          },
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('Отмена'),
+              ),
+              if (availableBooks.isNotEmpty)
+                FilledButton(
+                  style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPinkDark),
+                  onPressed: () {
+                    for (final bookId in selectedBookIds) {
+                      library.assignBookToShelf(bookId, shelf.id);
+                    }
+                    Navigator.pop(ctx);
+                  },
+                  child: Text('Добавить (${selectedBookIds.length})'),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showAssignShelfDialog(BuildContext context, BookItem book) {
+
     final library = context.read<LibraryProvider>();
     showDialog(
       context: context,
@@ -148,8 +259,26 @@ class _HomeScreenState extends State<HomeScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        if (library.activeFilter == LibraryFilter.shelf && library.activeShelf != null) ...[
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppTheme.primaryPinkDark,
+                              side: const BorderSide(color: AppTheme.primaryPinkDark),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: EdgeInsets.symmetric(horizontal: isDesktop ? 14 : 10, vertical: isDesktop ? 10 : 8),
+                            ),
+                            icon: const Icon(Icons.playlist_add_rounded, size: 18),
+                            label: Text(
+                              isDesktop ? 'Выбрать из библиотеки' : 'Из библиотеки',
+                              style: TextStyle(fontSize: isDesktop ? 14 : 12),
+                            ),
+                            onPressed: () => _showAddBooksToShelfDialog(context, library.activeShelf!),
+                          ),
+                        ],
                         const SizedBox(width: 8),
                         // Add Book button (icon-only on small screens, full button on desktop/tablet)
+
                         if (isDesktop)
                           FilledButton.icon(
                             style: FilledButton.styleFrom(
@@ -312,27 +441,59 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ),
                                   ),
                                   const SizedBox(height: 12),
-                                  if (library.searchQuery.isEmpty)
-                                    FilledButton.icon(
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: AppTheme.primaryPinkDark,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  if (library.searchQuery.isEmpty) ...[
+                                    if (library.activeFilter == LibraryFilter.shelf && library.activeShelf != null) ...[
+                                      FilledButton.icon(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: AppTheme.primaryPinkDark,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        icon: const Icon(Icons.playlist_add_rounded, size: 18),
+                                        label: const Text('Выбрать книги из библиотеки'),
+                                        onPressed: () => _showAddBooksToShelfDialog(context, library.activeShelf!),
                                       ),
-                                      icon: const Icon(Icons.file_upload_outlined, size: 18),
-                                      label: const Text('Загрузить EPUB, PDF, FB2, TXT'),
-                                      onPressed: () async {
-                                        final newBook = await library.pickAndAddBook();
-                                        if (newBook != null && context.mounted) {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(builder: (_) => ReaderScreen(book: newBook)),
-                                          );
-                                        }
-                                      },
-                                    ),
+                                      const SizedBox(height: 8),
+                                      OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: AppTheme.primaryPinkDark,
+                                          side: const BorderSide(color: AppTheme.primaryPinkDark),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        icon: const Icon(Icons.file_upload_outlined, size: 18),
+                                        label: const Text('Загрузить с устройства'),
+                                        onPressed: () async {
+                                          final newBook = await library.pickAndAddBook();
+                                          if (newBook != null && context.mounted) {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (_) => ReaderScreen(book: newBook)),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ] else
+                                      FilledButton.icon(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor: AppTheme.primaryPinkDark,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        icon: const Icon(Icons.file_upload_outlined, size: 18),
+                                        label: const Text('Загрузить EPUB, PDF, FB2, TXT'),
+                                        onPressed: () async {
+                                          final newBook = await library.pickAndAddBook();
+                                          if (newBook != null && context.mounted) {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(builder: (_) => ReaderScreen(book: newBook)),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                  ],
                                 ],
                               ),
                             )
+
                           : LayoutBuilder(
                               builder: (context, constraints) {
                                 final crossAxisCount = constraints.maxWidth > 900
@@ -580,6 +741,14 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              leading: const Icon(Icons.edit_note_rounded, color: AppTheme.primaryPinkDark),
+              title: const Text('Переименовать книгу...'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showRenameBookDialog(context, book);
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.folder_open_rounded, color: AppTheme.primaryPinkDark),
               title: const Text('Переместить на полку...'),
               onTap: () {
@@ -611,6 +780,64 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  void _showRenameBookDialog(BuildContext context, BookItem book) {
+    final titleController = TextEditingController(text: book.title);
+    final authorController = TextEditingController(text: book.author);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Переименовать книгу', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: titleController,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Название книги',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: authorController,
+              decoration: InputDecoration(
+                labelText: 'Автор',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPinkDark),
+            onPressed: () {
+              final newTitle = titleController.text.trim();
+              final newAuthor = authorController.text.trim();
+              if (newTitle.isNotEmpty) {
+                context.read<LibraryProvider>().updateBookDetails(
+                  book.id,
+                  title: newTitle,
+                  author: newAuthor.isNotEmpty ? newAuthor : 'Автор не указан',
+                );
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildFormatChip({
     required BuildContext context,

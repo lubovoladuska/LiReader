@@ -29,11 +29,14 @@ class ShelvesSidebar extends StatelessWidget {
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppTheme.primaryPinkDark),
-            onPressed: () {
+            onPressed: () async {
               final name = textController.text.trim();
               if (name.isNotEmpty) {
-                context.read<LibraryProvider>().createShelf(name);
-                Navigator.pop(ctx);
+                final shelf = await context.read<LibraryProvider>().createShelf(name);
+                if (context.mounted) {
+                  context.read<LibraryProvider>().setFilter(LibraryFilter.shelf, shelfId: shelf.id);
+                  Navigator.pop(ctx);
+                }
               }
             },
             child: const Text('Создать'),
@@ -42,6 +45,7 @@ class ShelvesSidebar extends StatelessWidget {
       ),
     );
   }
+
 
   @override
   Widget build(BuildContext context) {

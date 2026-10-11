@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:provider/provider.dart';
 import '../models/book_item.dart';
@@ -31,9 +32,19 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _pageController.dispose();
     super.dispose();
   }
+
+  void _updateSystemUI(bool isMenuVisible) {
+    if (isMenuVisible) {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    } else {
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    }
+  }
+
 
   void _onPageChanged(int index, ReaderProvider reader) {
     reader.setChapter(index);
@@ -68,7 +79,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
               ? chapters[reader.currentChapterIndex].title
               : 'Чтение';
 
+          _updateSystemUI(reader.isMenuVisible);
+          final isDesktop = MediaQuery.of(context).size.width > 700;
+
           return Scaffold(
+
             endDrawer: BookNotesSidebar(
               onSelectChapter: (idx) {
                 if (widget.book.format != BookFormat.pdf) {
@@ -238,8 +253,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         ),
 
                       // Floating navigation controls for Desktop / Mouse
-                      if (reader.isMenuVisible && chapters.length > 1) ...[
+                      if (isDesktop && reader.isMenuVisible && chapters.length > 1) ...[
                         if (reader.currentChapterIndex > 0)
+
                           Positioned(
                             left: 12,
                             top: 0,

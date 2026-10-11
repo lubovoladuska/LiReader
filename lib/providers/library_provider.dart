@@ -172,6 +172,18 @@ class LibraryProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> updateBookDetails(String bookId, {String? title, String? author}) async {
+    await _dbHelper.updateBookDetails(bookId, title: title, author: author);
+    final idx = _books.indexWhere((b) => b.id == bookId);
+    if (idx != -1) {
+      _books[idx] = _books[idx].copyWith(
+        title: title,
+        author: author,
+      );
+      notifyListeners();
+    }
+  }
+
   Future<void> assignBookToShelf(String bookId, String? shelfId) async {
     await _dbHelper.updateBookShelf(bookId, shelfId);
     final idx = _books.indexWhere((b) => b.id == bookId);
@@ -184,7 +196,8 @@ class LibraryProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> createShelf(String name) async {
+
+  Future<ShelfItem> createShelf(String name) async {
     final shelf = ShelfItem(
       id: _uuid.v4(),
       name: name,
@@ -193,7 +206,9 @@ class LibraryProvider extends ChangeNotifier {
     await _dbHelper.insertShelf(shelf);
     _shelves.add(shelf);
     notifyListeners();
+    return shelf;
   }
+
 
   Future<void> deleteShelf(String shelfId) async {
     await _dbHelper.deleteShelf(shelfId);
