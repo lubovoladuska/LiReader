@@ -1,16 +1,97 @@
-# lireader
+# 📖 LiReader
 
-A new Flutter project.
+<div align="center">
 
-## Getting Started
+![LiReader Banner](docs/images/promo_post.jpg)
 
-This project is a starting point for a Flutter application.
+**Современная, быстрая и эстетичная читалка для Android**  
+*Поддержка EPUB, FB2, TXT, Markdown и PDF с живыми обоями, системой цитат и автообновлениями напрямую с GitHub.*
 
-A few resources to get you started if this is your first Flutter project:
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
+[![Platform](https://img.shields.io/badge/Platform-Android_5.0--15-3DDC84?logo=android)](https://developer.android.com)
+[![GitHub release](https://img.shields.io/github/v/release/lubovoladuska/LiReader?color=E91E63)](https://github.com/lubovoladuska/LiReader/releases)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+[**⬇️ Скачать последний релиз (APK)**](https://github.com/lubovoladuska/LiReader/releases/latest) • [**💬 Связаться с автором**](https://wa.me/77087153537)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+</div>
+
+---
+
+## ✨ Ключевые возможности
+
+### 📚 Все любимые форматы в одном месте
+- **EPUB** — с оглавлением, разметкой глав, стилями и иллюстрациями.
+- **FB2** — полная поддержка книг русскоязычных библиотек.
+- **TXT / Markdown** — мгновенное открытие любых текстовых файлов.
+- **PDF** — быстрый просмотр с плавным масштабированием и навигацией.
+
+### 🎨 Кастомизация и атмосфера («Фон и Обои»)
+- Установка любых собственных фотографий и артов на фон чтения.
+- Ползунки затемнения (Dim), размытия (Blur) и тонирования (Tint) в реальном времени.
+- Автоматическая коррекция ориентации изображений (EXIF).
+- Готовые темы: светлая, тёплая (сепия), тёмная и ночной режим (AMOLED Black).
+- Тонкая настройка типографики: шрифт, размер, межстрочный интервал, выравнивание.
+
+### ⚡ Погружение в чтение (One-Tap Fullscreen)
+- Одиночный мягкий тап по экрану плавно скрывает меню и системные панели, переводя в режим полного погружения.
+- Повторный одиночный тап плавно возвращает элементы управления без резких рывков и сдвигов текста.
+- Быстрая навигация по главам: интерактивный ползунок и кнопки «⏮ Предыдущая / Следующая ⏭».
+
+### ✍️ Цитаты, маркеры и поиск
+- Выделение любого фрагмента текста с выбором цвета маркера и добавлением личных заметок.
+- Боковая панель заметок для мгновенного перехода к сохраненным цитатам.
+- Быстрый сквозной поиск по тексту всей книги.
+
+### 🔄 Встроенная система автообновлений (GitHub OTA)
+- При запуске приложение само проверяет наличие свежей версии на GitHub.
+- Фоновая загрузка обновления с отображением **процентов, объёма и скорости (МБ/с)** прямо в шторке уведомлений Android.
+- Автоматический запуск системного установщика пакетов сразу по завершении загрузки без потери данных и истории чтения.
+- Возможность ручной проверки обновлений в меню.
+
+### 💾 Резервное копирование и сохранность данных
+- Полный экспорт и импорт библиотеки, прочитанных глав, цитат и пользовательских обоев в один переносимый JSON-файл.
+- Защита от сброса прогресса при переустановках и смене устройств.
+
+---
+
+## 📱 Скриншоты и постеры
+
+<div align="center">
+  <img src="docs/images/promo_story.jpg" width="400" alt="LiReader Story Preview" />
+</div>
+
+---
+
+## 🚀 Установка
+
+1. Перейдите в раздел [**Releases**](https://github.com/lubovoladuska/LiReader/releases).
+2. Скачайте свежий файл `LiReader-vX.X.X-release.apk`.
+3. Откройте файл на Android-устройстве и подтвердите установку.
+4. Все последующие обновления приложение будет находить и предлагать установить автоматически!
+
+---
+
+## 🛠 Технологический стек
+
+- **Фреймворк:** Flutter (Dart 3.x)
+- **База данных:** SQLite (`sqflite`)
+- **Управление состоянием:** `provider`
+- **Парсеры книг:** `archive`, `xml`, `epub_view`, `pdfrx`
+- **Загрузка и сеть:** `dio`
+- **Уведомления:** `flutter_local_notifications`
+- **Установщик пакетов:** `open_filex`
+
+---
+
+## 💬 Обратная связь и контакты
+
+Есть идея, предложение или нашли баг? Напишите автору напрямую:
+- 📱 **WhatsApp:** [+7 708 715 35 37](https://wa.me/77087153537?text=%D0%97%D0%B4%D1%80%D0%B0%D0%B2%D1%81%D1%82%D0%B2%D1%83%D0%B9%D1%82%D0%B5!%20%D0%AF%20%D0%BF%D0%BE%D0%BB%D1%8C%D0%B7%D1%83%D1%8E%D1%81%D1%8C%20%D0%B2%D0%B0%D1%88%D0%B8%D0%BC%20%D0%BF%D1%80%D0%B8%D0%BB%D0%BE%D0%B6%D0%B5%D0%BD%D0%B8%D0%B5%D0%BC%20LiReader...)
+- 🐙 **GitHub Issues:** [Создать тикет](https://github.com/lubovoladuska/LiReader/issues)
+
+---
+
+<div align="center">
+Сделано с любовью для комфортного чтения ❤️
+</div>

@@ -1,10 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 import '../models/book_item.dart';
 import '../models/reader_theme_settings.dart';
+import '../models/search_result.dart';
 import '../services/book_parser_service.dart';
 import '../services/database_helper.dart';
+import '../services/image_utils.dart';
 
 class ReaderProvider extends ChangeNotifier {
   final BookItem book;
@@ -19,12 +24,44 @@ class ReaderProvider extends ChangeNotifier {
   List<BookHighlight> _highlights = [];
   ReaderThemeSettings _themeSettings = const ReaderThemeSettings();
 
+  // --- Reading Session Tracking ---
+  DateTime _sessionStartTime = DateTime.now();
+  int _sessionWordsRead = 0;
+  int _sessionPagesRead = 0;
+  Timer? _sessionAutoFlushTimer;
+
+  // --- In-Book Search ---
+  String _searchQuery = '';
+  bool _isSearching = false;
+  List<SearchResultItem> _searchResults = [];
+  int _currentSearchIndex = 0;
+
+  // --- Sleep Timer ---
+  Timer? _sleepTimer;
+  int _sleepTimerRemainingSeconds = 0;
+  VoidCallback? _onSleepTimerExpired;
+
   ReaderProvider({required this.book}) {
     _currentChapterIndex = book.currentChapterOrPage;
+    _sessionStartTime = DateTime.now();
+    _sessionAutoFlushTimer = Timer.periodic(const Duration(seconds: 45), (_) => _flushReadingSession());
     _init();
   }
 
+  @override
+  void dispose() {
+    _sessionAutoFlushTimer?.cancel();
+    _sleepTimer?.cancel();
+    _flushReadingSession();
+    super.dispose();
+  }
+
+  bool _hasError = false;
+  String? _errorMessage;
+
   bool get isLoading => _isLoading;
+  bool get hasError => _hasError || (_parsedData == null && !_isLoading);
+  String? get errorMessage => _errorMessage;
   BookParsedData? get parsedData => _parsedData;
   int get currentChapterIndex => _currentChapterIndex;
   double get chapterScrollProgress => _chapterScrollProgress;
@@ -39,8 +76,28 @@ class ReaderProvider extends ChangeNotifier {
 
   int get totalChapters => _parsedData?.chapters.length ?? 1;
 
+  // Search Getters
+  String get searchQuery => _searchQuery;
+  bool get isSearching => _isSearching;
+  List<SearchResultItem> get searchResults => _searchResults;
+  int get currentSearchIndex => _currentSearchIndex;
+  SearchResultItem? get currentSearchResult =>
+      _searchResults.isNotEmpty && _currentSearchIndex < _searchResults.length
+          ? _searchResults[_currentSearchIndex]
+          : null;
+
+  // Sleep Timer Getters
+  bool get isSleepTimerActive => _sleepTimer != null && _sleepTimer!.isActive;
+  int get sleepTimerRemainingSeconds => _sleepTimerRemainingSeconds;
+
+  Future<void> reload() async {
+    await _init();
+  }
+
   Future<void> _init() async {
     _isLoading = true;
+    _hasError = false;
+    _errorMessage = null;
     notifyListeners();
     try {
       _parsedData = await BookParserService.parseBook(book);
@@ -51,7 +108,19 @@ class ReaderProvider extends ChangeNotifier {
       if (settingsJson != null) {
         try {
           final map = json.decode(settingsJson) as Map<String, dynamic>;
-          _themeSettings = ReaderThemeSettings.fromMap(map);
+          var settings = ReaderThemeSettings.fromMap(map);
+          if (settings.backgroundImagePath != null && !settings.isAssetBackground) {
+            final bgFile = File(settings.backgroundImagePath!);
+            if (!bgFile.existsSync()) {
+              final resolved = await BookParserService.resolveBookFile(settings.backgroundImagePath!);
+              if (resolved != null) {
+                settings = settings.copyWith(backgroundImagePath: resolved.path);
+              } else {
+                settings = settings.copyWith(backgroundImagePath: null);
+              }
+            }
+          }
+          _themeSettings = settings;
         } catch (_) {}
       }
 
@@ -61,6 +130,8 @@ class ReaderProvider extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error initializing reader: $e');
+      _hasError = true;
+      _errorMessage = e.toString();
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -88,6 +159,13 @@ class ReaderProvider extends ChangeNotifier {
 
   void setChapter(int index) {
     if (index >= 0 && index < totalChapters) {
+      if (_currentChapterIndex != index) {
+        _sessionPagesRead++;
+        if (_parsedData != null && index < _parsedData!.chapters.length) {
+          final words = _parsedData!.chapters[index].content.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
+          _sessionWordsRead += (words > 0 ? (words * 0.7).toInt() : 120);
+        }
+      }
       _currentChapterIndex = index;
       _dbHelper.updateBookProgress(book.id, index, 0.0);
       notifyListeners();
@@ -95,11 +173,158 @@ class ReaderProvider extends ChangeNotifier {
   }
 
   void saveScrollProgress(double offset, {double fractional = 0.0}) {
+    final oldProgress = _chapterScrollProgress;
     _chapterScrollProgress = fractional.clamp(0.0, 1.0);
+    final delta = (_chapterScrollProgress - oldProgress).abs();
+    if (delta > 0.05 && _parsedData != null && _currentChapterIndex < _parsedData!.chapters.length) {
+      final wordsInCh = _parsedData!.chapters[_currentChapterIndex].content.split(RegExp(r'\s+')).length;
+      _sessionWordsRead += (delta * wordsInCh).round();
+    }
     _dbHelper.updateBookProgress(book.id, _currentChapterIndex, offset);
     notifyListeners();
   }
 
+  // --- Reading Session Tracking ---
+
+  void _flushReadingSession() {
+    final elapsedSecs = DateTime.now().difference(_sessionStartTime).inSeconds;
+    if (elapsedSecs >= 3 || _sessionWordsRead > 0 || _sessionPagesRead > 0) {
+      _dbHelper.recordReadingSession(
+        bookId: book.id,
+        bookTitle: book.title,
+        durationSeconds: elapsedSecs,
+        wordsRead: _sessionWordsRead,
+        pagesRead: _sessionPagesRead,
+      );
+    }
+    _sessionStartTime = DateTime.now();
+    _sessionWordsRead = 0;
+    _sessionPagesRead = 0;
+  }
+
+  // --- In-Book Search ---
+
+  Future<void> searchInBook(String query) async {
+    _searchQuery = query.trim();
+    if (_searchQuery.isEmpty || _parsedData == null) {
+      _searchResults = [];
+      _currentSearchIndex = 0;
+      _isSearching = false;
+      notifyListeners();
+      return;
+    }
+
+    _isSearching = true;
+    notifyListeners();
+
+    final results = <SearchResultItem>[];
+    final lowerQuery = _searchQuery.toLowerCase();
+
+    for (int chIdx = 0; chIdx < _parsedData!.chapters.length; chIdx++) {
+      final ch = _parsedData!.chapters[chIdx];
+      final text = ch.content;
+      final lowerText = text.toLowerCase();
+      int startIndex = 0;
+
+      while (startIndex < lowerText.length) {
+        final matchIdx = lowerText.indexOf(lowerQuery, startIndex);
+        if (matchIdx == -1) break;
+
+        final beforeStart = (matchIdx - 35).clamp(0, text.length);
+        final afterEnd = (matchIdx + lowerQuery.length + 35).clamp(0, text.length);
+
+        final snippetBefore = (beforeStart > 0 ? '...' : '') +
+            text.substring(beforeStart, matchIdx).replaceAll('\n', ' ');
+        final matchedText = text.substring(matchIdx, matchIdx + lowerQuery.length);
+        final snippetAfter = text.substring(matchIdx + lowerQuery.length, afterEnd).replaceAll('\n', ' ') +
+            (afterEnd < text.length ? '...' : '');
+
+        results.add(SearchResultItem(
+          chapterIndex: chIdx,
+          chapterTitle: ch.title.isNotEmpty ? ch.title : 'Глава ${chIdx + 1}',
+          matchCharOffset: matchIdx,
+          snippetBefore: snippetBefore,
+          matchedText: matchedText,
+          snippetAfter: snippetAfter,
+        ));
+
+        startIndex = matchIdx + lowerQuery.length;
+        if (results.length >= 200) break;
+      }
+      if (results.length >= 200) break;
+    }
+
+    _searchResults = results;
+    _currentSearchIndex = 0;
+    _isSearching = false;
+
+    if (results.isNotEmpty) {
+      goToSearchResult(0);
+    }
+    notifyListeners();
+  }
+
+  void nextSearchResult() {
+    if (_searchResults.isEmpty) return;
+    _currentSearchIndex = (_currentSearchIndex + 1) % _searchResults.length;
+    goToSearchResult(_currentSearchIndex);
+  }
+
+  void prevSearchResult() {
+    if (_searchResults.isEmpty) return;
+    _currentSearchIndex = (_currentSearchIndex - 1 + _searchResults.length) % _searchResults.length;
+    goToSearchResult(_currentSearchIndex);
+  }
+
+  void goToSearchResult(int index) {
+    if (index >= 0 && index < _searchResults.length) {
+      _currentSearchIndex = index;
+      final target = _searchResults[index];
+      if (target.chapterIndex != _currentChapterIndex) {
+        setChapter(target.chapterIndex);
+      } else {
+        notifyListeners();
+      }
+    }
+  }
+
+  void clearSearch() {
+    _searchQuery = '';
+    _searchResults = [];
+    _currentSearchIndex = 0;
+    _isSearching = false;
+    notifyListeners();
+  }
+
+  // --- Sleep Timer ---
+
+  void startSleepTimer(int minutes, {VoidCallback? onExpire}) {
+    cancelSleepTimer();
+    _sleepTimerRemainingSeconds = minutes * 60;
+    _onSleepTimerExpired = onExpire;
+    notifyListeners();
+
+    _sleepTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_sleepTimerRemainingSeconds <= 1) {
+        timer.cancel();
+        _sleepTimerRemainingSeconds = 0;
+        notifyListeners();
+        _onSleepTimerExpired?.call();
+      } else {
+        _sleepTimerRemainingSeconds--;
+        if (_sleepTimerRemainingSeconds % 5 == 0) {
+          notifyListeners();
+        }
+      }
+    });
+  }
+
+  void cancelSleepTimer() {
+    _sleepTimer?.cancel();
+    _sleepTimer = null;
+    _sleepTimerRemainingSeconds = 0;
+    notifyListeners();
+  }
 
   // --- Theme & Typography Settings ---
 
@@ -171,6 +396,85 @@ class ReaderProvider extends ChangeNotifier {
       customBackgroundColor: background ?? _themeSettings.customBackgroundColor,
       customTextColor: text ?? _themeSettings.customTextColor,
       isCustomColors: true,
+    );
+    _persistSettings();
+    notifyListeners();
+  }
+
+  // --- Background Image Customization ---
+
+  Future<bool> pickCustomBackgroundImage() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+      if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
+        final path = result.files.single.path!;
+        // Auto-detect EXIF orientation from JPEG header
+        final exifOrientation = await ImageUtils.getExifOrientation(path);
+        final initialRotation = ImageUtils.exifToClockwiseDegrees(exifOrientation);
+
+        _themeSettings = _themeSettings.copyWith(
+          backgroundImagePath: path,
+          isAssetBackground: false,
+          backgroundRotation: initialRotation,
+        );
+        _persistSettings();
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error picking background image: $e');
+    }
+    return false;
+  }
+
+  void setBackgroundAsset(String assetPath) {
+    _themeSettings = _themeSettings.copyWith(
+      backgroundImagePath: assetPath,
+      isAssetBackground: true,
+      backgroundRotation: 0,
+    );
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void rotateBackground() {
+    final nextRotation = (_themeSettings.backgroundRotation + 90) % 360;
+    _themeSettings = _themeSettings.copyWith(backgroundRotation: nextRotation);
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setBackgroundRotation(int degrees) {
+    _themeSettings = _themeSettings.copyWith(backgroundRotation: degrees % 360);
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setBackgroundFit(ReaderBackgroundFit fit) {
+    _themeSettings = _themeSettings.copyWith(backgroundFit: fit);
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setBackgroundDimming(double dimming) {
+    _themeSettings = _themeSettings.copyWith(backgroundDimming: dimming.clamp(0.0, 0.95));
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void setBackgroundBlur(double blur) {
+    _themeSettings = _themeSettings.copyWith(backgroundBlur: blur.clamp(0.0, 20.0));
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void clearBackgroundImage() {
+    _themeSettings = _themeSettings.copyWith(
+      clearBackgroundImage: true,
+      backgroundRotation: 0,
     );
     _persistSettings();
     notifyListeners();

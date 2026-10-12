@@ -1,9 +1,13 @@
+import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../models/book_item.dart';
+import '../../models/reader_theme_settings.dart';
 import '../../providers/reader_provider.dart';
+import '../../services/book_parser_service.dart';
 import '../../theme/app_theme.dart';
 import 'highlight_context_menu.dart';
 
@@ -30,6 +34,15 @@ class ChapterContentView extends StatefulWidget {
 
 class _ChapterContentViewState extends State<ChapterContentView> {
   final ScrollController _scrollController = ScrollController();
+  DateTime _lastTapTime = DateTime.fromMillisecondsSinceEpoch(0);
+
+  void _handleTap(ReaderProvider reader) {
+    final now = DateTime.now();
+    if (now.difference(_lastTapTime).inMilliseconds > 300) {
+      _lastTapTime = now;
+      reader.toggleMenu();
+    }
+  }
 
   @override
   void initState() {
@@ -310,69 +323,153 @@ class _ChapterContentViewState extends State<ChapterContentView> {
     return spans;
   }
 
+  Widget _buildBackgroundLayer(ReaderThemeSettings settings) {
+    if (!settings.hasBackgroundImage) {
+      return Container(color: settings.activeBackground);
+    }
+
+    final path = settings.backgroundImagePath!;
+    final ImageProvider imageProvider = settings.isAssetBackground
+        ? AssetImage(path)
+        : FileImage(File(path)) as ImageProvider;
+
+    BoxFit fit = BoxFit.cover;
+    ImageRepeat repeat = ImageRepeat.noRepeat;
+
+    switch (settings.backgroundFit) {
+      case ReaderBackgroundFit.cover:
+        fit = BoxFit.cover;
+        repeat = ImageRepeat.noRepeat;
+        break;
+      case ReaderBackgroundFit.contain:
+        fit = BoxFit.contain;
+        repeat = ImageRepeat.noRepeat;
+        break;
+      case ReaderBackgroundFit.tile:
+        fit = BoxFit.none;
+        repeat = ImageRepeat.repeat;
+        break;
+      case ReaderBackgroundFit.fill:
+        fit = BoxFit.fill;
+        repeat = ImageRepeat.noRepeat;
+        break;
+    }
+
+    Widget imageWidget = Image(
+      image: imageProvider,
+      fit: fit,
+      repeat: repeat,
+      width: double.infinity,
+      height: double.infinity,
+      alignment: Alignment.center,
+      errorBuilder: (context, error, stackTrace) => Container(color: settings.activeBackground),
+    );
+
+    if (settings.backgroundRotation != 0) {
+      final quarterTurns = (settings.backgroundRotation ~/ 90) % 4;
+      imageWidget = RotatedBox(
+        quarterTurns: quarterTurns,
+        child: imageWidget,
+      );
+    }
+
+    if (settings.backgroundBlur > 0) {
+      imageWidget = ImageFiltered(
+        imageFilter: ui.ImageFilter.blur(
+          sigmaX: settings.backgroundBlur,
+          sigmaY: settings.backgroundBlur,
+        ),
+        child: imageWidget,
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Container(color: settings.activeBackground),
+        imageWidget,
+        if (settings.backgroundDimming > 0)
+          Container(
+            color: Colors.black.withValues(alpha: settings.backgroundDimming),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final reader = context.watch<ReaderProvider>();
     final settings = reader.themeSettings;
     final textColor = settings.activeText;
 
+    final sanitizedContent = BookParserService.sanitizeReadingText(widget.content);
     final chapterHighlights = reader.highlights.where((h) => h.chapterIndex == widget.chapterIndex).toList();
 
-    return Container(
-      color: settings.activeBackground,
-      width: double.infinity,
-      height: double.infinity,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 860),
-          child: Scrollbar(
-            controller: _scrollController,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-              padding: EdgeInsets.symmetric(
-                horizontal: settings.horizontalPadding,
-                vertical: 36,
-              ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Chapter Header (only show if not already present in content)
-                    if (!widget.content.trimLeft().toLowerCase().startsWith(widget.title.trim().toLowerCase()))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 24),
-                        child: Text(
-                          widget.title,
-                          textAlign: settings.textAlign,
-                          style: TextStyle(
-                            fontFamily: settings.fontFamily.fontFamily,
-                            fontSize: settings.fontSize * 1.35,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: settings.letterSpacing,
-                            color: AppTheme.primaryPinkDark,
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () => _handleTap(reader),
+      child: Container(
+        color: settings.activeBackground,
+        width: double.infinity,
+        height: double.infinity,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildBackgroundLayer(settings),
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 860),
+                child: Scrollbar(
+                  controller: _scrollController,
+                  child: SingleChildScrollView(
+                    controller: _scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    padding: EdgeInsets.only(
+                      left: settings.horizontalPadding,
+                      right: settings.horizontalPadding,
+                      top: MediaQuery.paddingOf(context).top + 20,
+                      bottom: 50,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                      // Chapter Header (only show if not already present in content)
+                      if (!sanitizedContent.trimLeft().toLowerCase().startsWith(widget.title.trim().toLowerCase()))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 24),
+                          child: Text(
+                            widget.title,
+                            textAlign: settings.textAlign,
+                            style: TextStyle(
+                              fontFamily: settings.fontFamily.fontFamily,
+                              fontSize: settings.fontSize * 1.35,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: settings.letterSpacing,
+                              color: AppTheme.primaryPinkDark,
+                            ),
                           ),
                         ),
-                      ),
 
-                    // Chapter Content with rich styling
-                    SelectableText.rich(
-                      TextSpan(
-                        children: _buildHighlightedSpans(
-                          context,
-                          widget.content,
-                          chapterHighlights,
-                          textColor,
-                          reader,
+                      // Chapter Content with rich styling
+                      SelectableText.rich(
+                        TextSpan(
+                          children: _buildHighlightedSpans(
+                            context,
+                            sanitizedContent,
+                            chapterHighlights,
+                            textColor,
+                            reader,
+                          ),
                         ),
-                      ),
-                      textAlign: settings.textAlign,
-                      style: TextStyle(
-                        fontFamily: settings.fontFamily.fontFamily,
-                        fontSize: settings.fontSize,
-                        height: settings.lineHeight,
-                        letterSpacing: settings.letterSpacing,
-                        color: textColor,
-                      ),
+                        onTap: () => _handleTap(reader),
+                        textAlign: settings.textAlign,
+                        style: TextStyle(
+                          fontFamily: settings.fontFamily.fontFamily,
+                          fontSize: settings.fontSize,
+                          height: settings.lineHeight,
+                          letterSpacing: settings.letterSpacing,
+                          color: textColor,
+                        ),
                       contextMenuBuilder: (context, editableTextState) {
                       final selection = editableTextState.textEditingValue.selection;
                       final selectedText = editableTextState.textEditingValue.text.substring(
@@ -430,9 +527,11 @@ class _ChapterContentViewState extends State<ChapterContentView> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                     decoration: BoxDecoration(
-                      color: settings.activeBackground == const Color(0xFF0F0E0F) || settings.activeBackground == const Color(0xFF242023)
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : Colors.black.withValues(alpha: 0.03),
+                      color: settings.hasBackgroundImage
+                          ? Colors.black.withValues(alpha: 0.35)
+                          : (settings.activeBackground == const Color(0xFF0F0E0F) || settings.activeBackground == const Color(0xFF242023)
+                              ? Colors.white.withValues(alpha: 0.05)
+                              : Colors.black.withValues(alpha: 0.03)),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: settings.activeText.withValues(alpha: 0.12),
@@ -481,9 +580,11 @@ class _ChapterContentViewState extends State<ChapterContentView> {
                   const SizedBox(height: 80),
                 ],
               ),
-
             ),
           ),
+        ),
+      ),
+          ],
         ),
       ),
     );

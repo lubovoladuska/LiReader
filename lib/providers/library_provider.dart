@@ -13,6 +13,21 @@ enum LibraryFilter {
   shelf,
 }
 
+enum LibraryViewMode {
+  grid,
+  list,
+}
+
+enum LibrarySortBy {
+  lastRead('Недавно открытые'),
+  title('По названию (А-Я)'),
+  author('По автору'),
+  format('По формату файла');
+
+  final String label;
+  const LibrarySortBy(this.label);
+}
+
 class LibraryProvider extends ChangeNotifier {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   static const _uuid = Uuid();
@@ -24,6 +39,8 @@ class LibraryProvider extends ChangeNotifier {
   LibraryFilter _activeFilter = LibraryFilter.all;
   String? _selectedShelfId;
   BookFormat? _selectedFormat;
+  LibraryViewMode _viewMode = LibraryViewMode.grid;
+  LibrarySortBy _sortBy = LibrarySortBy.lastRead;
 
   List<BookItem> get allBooks => _books;
   List<ShelfItem> get shelves => _shelves;
@@ -32,6 +49,8 @@ class LibraryProvider extends ChangeNotifier {
   LibraryFilter get activeFilter => _activeFilter;
   String? get selectedShelfId => _selectedShelfId;
   BookFormat? get selectedFormat => _selectedFormat;
+  LibraryViewMode get viewMode => _viewMode;
+  LibrarySortBy get sortBy => _sortBy;
 
   ShelfItem? get activeShelf {
     if (_selectedShelfId == null) return null;
@@ -39,7 +58,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   List<BookItem> get books {
-    List<BookItem> filtered = _books;
+    List<BookItem> filtered = List.from(_books);
 
     switch (_activeFilter) {
       case LibraryFilter.all:
@@ -68,8 +87,25 @@ class LibraryProvider extends ChangeNotifier {
       filtered = filtered.where((b) => b.title.toLowerCase().contains(q) || b.author.toLowerCase().contains(q)).toList();
     }
 
+    // Apply sorting
+    switch (_sortBy) {
+      case LibrarySortBy.lastRead:
+        filtered.sort((a, b) => b.lastReadAt.compareTo(a.lastReadAt));
+        break;
+      case LibrarySortBy.title:
+        filtered.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        break;
+      case LibrarySortBy.author:
+        filtered.sort((a, b) => a.author.toLowerCase().compareTo(b.author.toLowerCase()));
+        break;
+      case LibrarySortBy.format:
+        filtered.sort((a, b) => a.format.name.compareTo(b.format.name));
+        break;
+    }
+
     return filtered;
   }
+
 
 
   Future<void> loadLibrary() async {
@@ -91,7 +127,20 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<void> _healMissingCovers() async {
     for (int i = 0; i < _books.length; i++) {
-      final book = _books[i];
+      var book = _books[i];
+      // 1. Auto-heal broken/cached file path if possible
+      if (!File(book.filePath).existsSync()) {
+        try {
+          final resolvedFile = await BookParserService.resolveBookFile(book.filePath);
+          if (resolvedFile != null) {
+            final permPath = await BookParserService.copyToPermanentStorage(resolvedFile.path);
+            await _dbHelper.updateBookDetails(book.id, filePath: permPath);
+            book = book.copyWith(filePath: permPath);
+            _books[i] = book;
+          }
+        } catch (_) {}
+      }
+
       final coverExists = book.coverPath != null && File(book.coverPath!).existsSync();
       if (!coverExists && (book.format == BookFormat.epub || book.format == BookFormat.fb2)) {
         try {
@@ -106,6 +155,33 @@ class LibraryProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> relinkBook(String bookId, String newFilePath) async {
+    try {
+      final permPath = await BookParserService.copyToPermanentStorage(newFilePath);
+      final idx = _books.indexWhere((b) => b.id == bookId);
+      if (idx == -1) return false;
+
+      var book = _books[idx].copyWith(filePath: permPath);
+      final newCover = await BookParserService.extractCoverForBook(book);
+      if (newCover != null) {
+        book = book.copyWith(coverPath: newCover);
+      }
+
+      await _dbHelper.updateBookDetails(
+        bookId,
+        filePath: permPath,
+        coverPath: newCover,
+      );
+
+      _books[idx] = book;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('Error relinking book: $e');
+      return false;
+    }
+  }
+
   void setFilter(LibraryFilter filter, {String? shelfId}) {
     _activeFilter = filter;
     _selectedShelfId = shelfId;
@@ -117,11 +193,21 @@ class LibraryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setSearchQuery(String query) {
+  void setViewMode(LibraryViewMode mode) {
+    _viewMode = mode;
+    notifyListeners();
+  }
 
+  void setSortBy(LibrarySortBy sortBy) {
+    _sortBy = sortBy;
+    notifyListeners();
+  }
+
+  void setSearchQuery(String query) {
     _searchQuery = query;
     notifyListeners();
   }
+
 
   Future<BookItem?> pickAndAddBook() async {
     try {

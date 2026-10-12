@@ -35,9 +35,93 @@ class BookParsedData {
 class BookParserService {
   static const _uuid = Uuid();
 
+  /// Copies a book file to permanent app documents storage so it is never lost by cache cleaners.
+  static Future<String> copyToPermanentStorage(String sourcePath) async {
+    try {
+      final sourceFile = File(sourcePath);
+      if (!sourceFile.existsSync()) return sourcePath;
+
+      final appDocsDir = await getApplicationDocumentsDirectory();
+      final booksDir = Directory(p.join(appDocsDir.path, 'LiReader', 'books'));
+      if (!await booksDir.exists()) {
+        await booksDir.create(recursive: true);
+      }
+      final fileName = p.basename(sourcePath);
+      final destPath = p.join(booksDir.path, fileName);
+      final destFile = File(destPath);
+      if (await destFile.exists() && destFile.lengthSync() > 0) {
+        return destPath;
+      }
+      final copied = await sourceFile.copy(destPath);
+      return copied.path;
+    } catch (e) {
+      debugPrint('Error copying book to permanent storage: $e');
+      return sourcePath;
+    }
+  }
+
+  /// Automatically locates a book file if its original path is missing or points to a deleted cache folder.
+  static Future<File?> resolveBookFile(String originalPath) async {
+    final direct = File(originalPath);
+    if (direct.existsSync() && direct.lengthSync() > 0) return direct;
+
+    final fileName = p.basename(originalPath);
+    final candidates = <String>[
+      '/storage/emulated/0/Download/$fileName',
+      '/sdcard/Download/$fileName',
+      '/storage/emulated/0/Download/Telegram/$fileName',
+      '/sdcard/Download/Telegram/$fileName',
+      '/storage/emulated/0/Documents/$fileName',
+      '/sdcard/Documents/$fileName',
+    ];
+
+    try {
+      final appDocs = await getApplicationDocumentsDirectory();
+      candidates.add(p.join(appDocs.path, 'LiReader', 'books', fileName));
+    } catch (_) {}
+
+    try {
+      final extDir = await getExternalStorageDirectory();
+      if (extDir != null) {
+        candidates.add(p.join(extDir.path, fileName));
+      }
+    } catch (_) {}
+
+    for (final path in candidates) {
+      try {
+        final f = File(path);
+        if (f.existsSync() && f.lengthSync() > 0) {
+          return f;
+        }
+      } catch (_) {}
+    }
+
+    // Fuzzy check: search in /storage/emulated/0/Download/
+    try {
+      final downloadDir = Directory('/storage/emulated/0/Download');
+      if (downloadDir.existsSync()) {
+        final files = downloadDir.listSync(followLinks: false);
+        final baseWithoutExt = p.basenameWithoutExtension(originalPath).toLowerCase();
+        for (final entity in files) {
+          if (entity is File) {
+            final name = p.basename(entity.path).toLowerCase();
+            if (name.contains(baseWithoutExt) || baseWithoutExt.contains(p.basenameWithoutExtension(name))) {
+              if (p.extension(entity.path).toLowerCase() == p.extension(originalPath).toLowerCase()) {
+                return entity;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   static Future<BookItem> createBookItemFromFile(String filePath) async {
-    final ext = p.extension(filePath).toLowerCase();
-    final fileName = p.basenameWithoutExtension(filePath);
+    final permanentPath = await copyToPermanentStorage(filePath);
+    final ext = p.extension(permanentPath).toLowerCase();
+    final fileName = p.basenameWithoutExtension(permanentPath);
 
     BookFormat format = BookFormat.unknown;
     String title = fileName;
@@ -48,25 +132,25 @@ class BookParserService {
 
     if (ext == '.epub') {
       format = BookFormat.epub;
-      final parsed = await parseEpub(filePath);
+      final parsed = await parseEpub(permanentPath);
       title = parsed.title.isNotEmpty ? parsed.title : fileName;
       author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
       totalUnits = parsed.chapters.length;
-      coverPath = await _extractEpubCover(filePath);
+      coverPath = await _extractEpubCover(permanentPath);
     } else if (ext == '.fb2') {
       format = BookFormat.fb2;
-      final parsed = await parseFb2(filePath);
+      final parsed = await parseFb2(permanentPath);
       title = parsed.title.isNotEmpty ? parsed.title : fileName;
       author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
       totalUnits = parsed.chapters.length;
-      coverPath = await _extractFb2Cover(filePath);
+      coverPath = await _extractFb2Cover(permanentPath);
     } else if (ext == '.txt') {
       format = BookFormat.txt;
-      final parsed = await parseTxt(filePath);
+      final parsed = await parseTxt(permanentPath);
       totalUnits = parsed.chapters.length;
     } else if (ext == '.md') {
       format = BookFormat.markdown;
-      final parsed = await parseTxt(filePath);
+      final parsed = await parseTxt(permanentPath);
       totalUnits = parsed.chapters.length;
     } else if (ext == '.pdf') {
       format = BookFormat.pdf;
@@ -76,7 +160,7 @@ class BookParserService {
       id: _uuid.v4(),
       title: title,
       author: author,
-      filePath: filePath,
+      filePath: permanentPath,
       format: format,
       totalChaptersOrPages: totalUnits > 0 ? totalUnits : 1,
       currentChapterOrPage: 0,
@@ -251,23 +335,33 @@ class BookParserService {
   }
 
   static Future<String?> extractCoverForBook(BookItem book) async {
+    final file = await resolveBookFile(book.filePath);
+    if (file == null) return null;
+    final path = file.path;
+
     if (book.format == BookFormat.epub) {
-      return await _extractEpubCover(book.filePath);
+      return await _extractEpubCover(path);
     } else if (book.format == BookFormat.fb2) {
-      return await _extractFb2Cover(book.filePath);
+      return await _extractFb2Cover(path);
     }
     return null;
   }
 
   static Future<BookParsedData> parseBook(BookItem book) async {
+    final file = await resolveBookFile(book.filePath);
+    if (file == null) {
+      throw FileSystemException('Файл книги не найден на устройстве', book.filePath);
+    }
+    final path = file.path;
+
     switch (book.format) {
       case BookFormat.epub:
-        return await parseEpub(book.filePath);
+        return await parseEpub(path);
       case BookFormat.fb2:
-        return await parseFb2(book.filePath);
+        return await parseFb2(path);
       case BookFormat.txt:
       case BookFormat.markdown:
-        return await parseTxt(book.filePath);
+        return await parseTxt(path);
       default:
         return BookParsedData(
           title: book.title,
@@ -298,12 +392,15 @@ class BookParserService {
           RegExp(r'^(Глава|Часть|Chapter|Part)\s+\d+', caseSensitive: false).hasMatch(trimmed);
 
       if (isHeading && buffer.isNotEmpty) {
-        chapters.add(BookChapter(
-          index: chapterIndex,
-          title: currentTitle,
-          content: buffer.toString(),
-        ));
-        chapterIndex++;
+        final content = sanitizeReadingText(buffer.toString());
+        if (content.isNotEmpty) {
+          chapters.add(BookChapter(
+            index: chapterIndex,
+            title: currentTitle,
+            content: content,
+          ));
+          chapterIndex++;
+        }
         currentTitle = trimmed.replaceAll(RegExp(r'^#+\s*'), '');
         buffer.clear();
       }
@@ -311,11 +408,14 @@ class BookParserService {
     }
 
     if (buffer.isNotEmpty || chapters.isEmpty) {
-      chapters.add(BookChapter(
-        index: chapterIndex,
-        title: currentTitle,
-        content: buffer.toString(),
-      ));
+      final content = sanitizeReadingText(buffer.toString());
+      if (content.isNotEmpty || chapters.isEmpty) {
+        chapters.add(BookChapter(
+          index: chapterIndex,
+          title: currentTitle,
+          content: content.isNotEmpty ? content : 'Пустой документ',
+        ));
+      }
     }
 
     return BookParsedData(
@@ -477,12 +577,24 @@ class BookParserService {
 
     for (final sec in sections) {
       final secTitle = sec.findAllElements('title').firstOrNull?.innerText.trim() ?? 'Глава ${idx + 1}';
-      final paragraphs = sec.findAllElements('p').map((e) => e.innerText.trim()).join('\n\n');
-      if (paragraphs.isNotEmpty) {
+      final titleElem = sec.findElements('title').firstOrNull;
+
+      final paragraphs = <String>[];
+      for (final pElem in sec.findAllElements('p')) {
+        // Skip p elements that belong to <title>
+        if (titleElem != null && titleElem.descendants.contains(pElem)) continue;
+        final pText = sanitizeReadingText(pElem.innerText);
+        if (pText.isNotEmpty) {
+          paragraphs.add(pText);
+        }
+      }
+
+      final content = sanitizeReadingText(paragraphs.join('\n\n'));
+      if (content.isNotEmpty) {
         chapters.add(BookChapter(
           index: idx,
           title: secTitle,
-          content: paragraphs,
+          content: content,
         ));
         idx++;
       }
@@ -490,10 +602,11 @@ class BookParserService {
 
     if (chapters.isEmpty) {
       final body = xml.findAllElements('body').firstOrNull?.innerText ?? '';
+      final content = sanitizeReadingText(body);
       chapters.add(BookChapter(
         index: 0,
         title: 'Начало книги',
-        content: body.isNotEmpty ? body : 'Пустой документ FB2',
+        content: content.isNotEmpty ? content : 'Пустой документ FB2',
       ));
     }
 
@@ -504,16 +617,82 @@ class BookParserService {
     );
   }
 
+  static String _decodeHtmlEntities(String text) {
+    return text
+        .replaceAll('&nbsp;', ' ')
+        .replaceAll('&#160;', ' ')
+        .replaceAll('&#xA0;', ' ')
+        .replaceAll('&#xa0;', ' ')
+        .replaceAll('&ensp;', ' ')
+        .replaceAll('&emsp;', ' ')
+        .replaceAll('&thinsp;', ' ')
+        .replaceAll('&quot;', '"')
+        .replaceAll('&apos;', "'")
+        .replaceAll('&#39;', "'")
+        .replaceAll('&amp;', '&')
+        .replaceAll('&lt;', '<')
+        .replaceAll('&gt;', '>')
+        .replaceAll('&laquo;', '«')
+        .replaceAll('&raquo;', '»')
+        .replaceAll('&ldquo;', '“')
+        .replaceAll('&rdquo;', '”')
+        .replaceAll('&lsquo;', '‘')
+        .replaceAll('&rsquo;', '’')
+        .replaceAll('&mdash;', '—')
+        .replaceAll('&ndash;', '–')
+        .replaceAll('&hellip;', '…')
+        .replaceAll('&#8230;', '…');
+  }
+
+  /// Sanitizes text by stripping whitespace-only lines and collapsing any excessive
+  /// newlines into at most a single empty line between paragraphs (\n\n).
+  static String sanitizeReadingText(String text) {
+    if (text.isEmpty) return '';
+
+    // 1. Normalize line endings
+    var s = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+
+    // 2. Decode HTML entities
+    s = _decodeHtmlEntities(s);
+
+    // 3. Process line-by-line: trim every line to eliminate hidden whitespace/indentation
+    final lines = s.split('\n');
+    final cleanedLines = <String>[];
+    for (final line in lines) {
+      cleanedLines.add(line.trim());
+    }
+    s = cleanedLines.join('\n');
+
+    // 4. Collapse any run of 3 or more newlines into exactly 2 newlines (\n\n)
+    s = s.replaceAll(RegExp(r'\n{3,}'), '\n\n');
+
+    // 5. Collapse duplicate spaces within lines
+    s = s.replaceAll(RegExp(r'[ \t]{2,}'), ' ');
+
+    return s.trim();
+  }
+
   static String _extractTextFromHtml(String html) {
-    var text = html.replaceAll(RegExp(r'<style[^>]*>[\s\S]*?</style>'), '');
-    text = text.replaceAll(RegExp(r'<script[^>]*>[\s\S]*?</script>'), '');
-    text = text.replaceAll(RegExp(r'</?(p|div|br|h1|h2|h3|h4|h5|h6)[^>]*>'), '\n\n');
+    if (html.isEmpty) return '';
+
+    // 1. Strip styles, scripts, head, and comments
+    var text = html.replaceAll(RegExp(r'<style[^>]*>[\s\S]*?</style>', caseSensitive: false), '');
+    text = text.replaceAll(RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '');
+    text = text.replaceAll(RegExp(r'<head[^>]*>[\s\S]*?</head>', caseSensitive: false), '');
+    text = text.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
+
+    // 2. Line break tags -> single newline
+    text = text.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+
+    // 3. Block boundaries: closing tags -> \n\n, opening tags -> \n
+    const blockTags = 'p|div|h1|h2|h3|h4|h5|h6|li|blockquote|section|article|header|footer|aside|table|tr';
+    text = text.replaceAll(RegExp('</($blockTags)>', caseSensitive: false), '\n\n');
+    text = text.replaceAll(RegExp('<($blockTags)[^>]*>', caseSensitive: false), '\n');
+
+    // 4. Strip all remaining HTML tags
     text = text.replaceAll(RegExp(r'<[^>]+>'), '');
-    text = text.replaceAll('&nbsp;', ' ');
-    text = text.replaceAll('&quot;', '"');
-    text = text.replaceAll('&amp;', '&');
-    text = text.replaceAll('&lt;', '<');
-    text = text.replaceAll('&gt;', '>');
-    return text.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
+
+    // 5. Sanitize and collapse all excessive gaps
+    return sanitizeReadingText(text);
   }
 }

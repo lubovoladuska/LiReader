@@ -1,10 +1,14 @@
 import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import '../models/book_item.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/library/shelves_sidebar.dart';
+import '../services/update_service.dart';
+import '../widgets/common/update_dialog.dart';
 import 'reader_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,6 +26,21 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<LibraryProvider>().loadLibrary();
+      _checkForUpdatesSilently();
+    });
+  }
+
+  void _checkForUpdatesSilently() {
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      try {
+        final info = await UpdateService.checkForUpdate();
+        if (info.hasUpdate && mounted) {
+          UpdateDialog.show(context, info);
+        }
+      } catch (e) {
+        debugPrint('Silent update check error: $e');
+      }
     });
   }
 
@@ -321,34 +340,103 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
 
-                // Search Bar
+                // Search Bar + View Mode + Sort Menu
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (val) => library.setSearchQuery(val),
-                    decoration: InputDecoration(
-                      hintText: 'Поиск книги или автора...',
-                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear_rounded, size: 18),
-                              onPressed: () {
-                                _searchController.clear();
-                                library.setSearchQuery('');
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: isDark ? AppTheme.darkSurface : const Color(0xFFF2ECEE),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onChanged: (val) => library.setSearchQuery(val),
+                          decoration: InputDecoration(
+                            hintText: 'Поиск книги или автора...',
+                            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                            suffixIcon: _searchController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear_rounded, size: 18),
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      library.setSearchQuery('');
+                                    },
+                                  )
+                                : null,
+                            filled: true,
+                            fillColor: isDark ? AppTheme.darkSurface : const Color(0xFFF2ECEE),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          ),
+                        ),
                       ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    ),
+                      const SizedBox(width: 8),
+
+                      // Sort Menu Button
+                      PopupMenuButton<LibrarySortBy>(
+                        tooltip: 'Сортировка: ${library.sortBy.label}',
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppTheme.darkSurface : const Color(0xFFF2ECEE),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.sort_rounded, size: 20),
+                        ),
+                        onSelected: (sortBy) => library.setSortBy(sortBy),
+                        itemBuilder: (ctx) => LibrarySortBy.values.map((s) {
+                          final isSelected = library.sortBy == s;
+                          return PopupMenuItem(
+                            value: s,
+                            child: Row(
+                              children: [
+                                if (isSelected)
+                                  const Icon(Icons.check_rounded, size: 18, color: AppTheme.primaryPinkDark)
+                                else
+                                  const SizedBox(width: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  s.label,
+                                  style: TextStyle(
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    color: isSelected ? AppTheme.primaryPinkDark : null,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+
+                      const SizedBox(width: 4),
+
+                      // View Mode Toggle Button (Grid / List)
+                      IconButton(
+                        tooltip: library.viewMode == LibraryViewMode.grid ? 'Вид: Список' : 'Вид: Сетка',
+                        style: IconButton.styleFrom(
+                          backgroundColor: isDark ? AppTheme.darkSurface : const Color(0xFFF2ECEE),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: Icon(
+                          library.viewMode == LibraryViewMode.grid
+                              ? Icons.view_list_rounded
+                              : Icons.grid_view_rounded,
+                          size: 20,
+                        ),
+                        onPressed: () {
+                          library.setViewMode(
+                            library.viewMode == LibraryViewMode.grid
+                                ? LibraryViewMode.list
+                                : LibraryViewMode.grid,
+                          );
+                        },
+                      ),
+                    ],
                   ),
                 ),
+
 
                 // Format Filter Chips
                 SingleChildScrollView(
@@ -494,30 +582,40 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             )
 
-                          : LayoutBuilder(
-                              builder: (context, constraints) {
-                                final crossAxisCount = constraints.maxWidth > 900
-                                    ? 4
-                                    : constraints.maxWidth > 580
-                                        ? 3
-                                        : 2;
-
-                                return GridView.builder(
-                                  padding: const EdgeInsets.all(16),
-                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: crossAxisCount,
-                                    crossAxisSpacing: 16,
-                                    mainAxisSpacing: 16,
-                                    childAspectRatio: 0.72,
-                                  ),
+                          : library.viewMode == LibraryViewMode.list
+                              ? ListView.separated(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                                   itemCount: library.books.length,
+                                  separatorBuilder: (_, _) => const SizedBox(height: 8),
                                   itemBuilder: (ctx, idx) {
                                     final book = library.books[idx];
-                                    return _buildBookCard(context, book, isDark);
+                                    return _buildBookListTile(context, book, isDark);
                                   },
-                                );
-                              },
-                            ),
+                                )
+                              : LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final crossAxisCount = constraints.maxWidth > 900
+                                        ? 4
+                                        : constraints.maxWidth > 580
+                                            ? 3
+                                            : 2;
+
+                                    return GridView.builder(
+                                      padding: const EdgeInsets.all(16),
+                                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: crossAxisCount,
+                                        crossAxisSpacing: 16,
+                                        mainAxisSpacing: 16,
+                                        childAspectRatio: 0.72,
+                                      ),
+                                      itemCount: library.books.length,
+                                      itemBuilder: (ctx, idx) {
+                                        final book = library.books[idx];
+                                        return _buildBookCard(context, book, isDark);
+                                      },
+                                    );
+                                  },
+                                ),
                 ),
               ],
             ),
@@ -730,6 +828,170 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildBookListTile(BuildContext context, BookItem book, bool isDark) {
+    final library = context.read<LibraryProvider>();
+    final hasCover = book.coverPath != null && File(book.coverPath!).existsSync();
+    final progressFraction = book.totalChaptersOrPages > 0
+        ? ((book.currentChapterOrPage + 1) / book.totalChaptersOrPages).clamp(0.0, 1.0)
+        : 0.0;
+    final progressPercent = (progressFraction * 100).toInt();
+
+    return Material(
+      color: isDark ? AppTheme.darkCard : Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      elevation: isDark ? 0 : 1,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ReaderScreen(book: book)),
+          ).then((_) {
+            library.loadLibrary();
+          });
+        },
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDark ? AppTheme.darkDivider : const Color(0xFFEFE8E9),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              // Cover
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  width: 52,
+                  height: 74,
+                  child: hasCover
+                      ? Image.file(
+                          File(book.coverPath!),
+                          fit: BoxFit.cover,
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                AppTheme.primaryPink.withValues(alpha: 0.4),
+                                AppTheme.accentPeach.withValues(alpha: 0.45),
+                              ],
+                            ),
+                          ),
+                          child: Center(
+                            child: Icon(
+                              book.format == BookFormat.pdf
+                                  ? Icons.picture_as_pdf_rounded
+                                  : Icons.menu_book_rounded,
+                              size: 26,
+                              color: AppTheme.primaryPinkDark.withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      book.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      book.author,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.lightTextSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: _getFormatBadgeColor(book.format).withValues(alpha: 0.9),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            book.format.name.toUpperCase(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${book.currentChapterOrPage + 1}/${book.totalChaptersOrPages} ($progressPercent%)',
+                                style: TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primaryPinkDark,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(2),
+                                child: LinearProgressIndicator(
+                                  value: progressFraction,
+                                  minHeight: 3,
+                                  backgroundColor: isDark ? Colors.white10 : Colors.black12,
+                                  valueColor: const AlwaysStoppedAnimation(AppTheme.primaryPinkDark),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Action buttons
+              IconButton(
+                icon: Icon(
+                  book.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  color: book.isFavorite ? Colors.redAccent : (isDark ? Colors.white38 : Colors.black38),
+                  size: 20,
+                ),
+                onPressed: () => library.toggleFavorite(book.id),
+              ),
+              IconButton(
+                icon: const Icon(Icons.more_vert_rounded, size: 20),
+                onPressed: () => _showBookOptions(context, book),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showBookOptions(BuildContext context, BookItem book) {
     showModalBottomSheet(
       context: context,
@@ -754,6 +1016,39 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () {
                 Navigator.pop(ctx);
                 _showAssignShelfDialog(context, book);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.link_rounded, color: AppTheme.primaryPinkDark),
+              title: const Text('Привязать файл книги...'),
+              subtitle: Text(
+                File(book.filePath).existsSync() ? 'Файл книги подключён' : 'Файл не найден на устройстве',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: File(book.filePath).existsSync() ? Colors.green : Colors.redAccent,
+                ),
+              ),
+              onTap: () async {
+                Navigator.pop(ctx);
+                final result = await FilePicker.platform.pickFiles(
+                  type: FileType.custom,
+                  allowedExtensions: ['epub', 'fb2', 'txt', 'md', 'pdf'],
+                  allowMultiple: false,
+                );
+                if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
+                  final newPath = result.files.single.path!;
+                  if (context.mounted) {
+                    final ok = await context.read<LibraryProvider>().relinkBook(book.id, newPath);
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(ok ? 'Файл «${p.basename(newPath)}» успешно привязан!' : 'Не удалось привязать файл'),
+                          backgroundColor: ok ? Colors.green : Colors.redAccent,
+                        ),
+                      );
+                    }
+                  }
+                }
               },
             ),
             ListTile(

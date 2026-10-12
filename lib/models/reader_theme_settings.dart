@@ -24,6 +24,16 @@ enum ReaderColorPreset {
   const ReaderColorPreset(this.label, this.backgroundColor, this.textColor);
 }
 
+enum ReaderBackgroundFit {
+  cover('Заполнение'),
+  contain('Вписать'),
+  tile('Плитка'),
+  fill('Растянуть');
+
+  final String label;
+  const ReaderBackgroundFit(this.label);
+}
+
 class ReaderThemeSettings {
   final ReaderFontFamily fontFamily;
   final double fontSize;
@@ -37,6 +47,14 @@ class ReaderThemeSettings {
   final Color customTextColor;
   final bool isCustomColors;
 
+  // Background Image Customization
+  final String? backgroundImagePath;
+  final ReaderBackgroundFit backgroundFit;
+  final double backgroundDimming; // 0.0 to 0.9
+  final double backgroundBlur; // 0.0 to 15.0
+  final bool isAssetBackground;
+  final int backgroundRotation; // 0, 90, 180, 270 degrees
+
   const ReaderThemeSettings({
     this.fontFamily = ReaderFontFamily.serif,
     this.fontSize = 18.0,
@@ -49,7 +67,15 @@ class ReaderThemeSettings {
     this.customBackgroundColor = const Color(0xFFF7F1E5),
     this.customTextColor = const Color(0xFF2E2620),
     this.isCustomColors = false,
+    this.backgroundImagePath,
+    this.backgroundFit = ReaderBackgroundFit.cover,
+    this.backgroundDimming = 0.35,
+    this.backgroundBlur = 0.0,
+    this.isAssetBackground = false,
+    this.backgroundRotation = 0,
   });
+
+  bool get hasBackgroundImage => backgroundImagePath != null && backgroundImagePath!.isNotEmpty;
 
   Color get activeBackground => isCustomColors ? customBackgroundColor : colorPreset.backgroundColor;
   Color get activeText => isCustomColors ? customTextColor : colorPreset.textColor;
@@ -67,6 +93,12 @@ class ReaderThemeSettings {
       'customBackgroundColor': customBackgroundColor.toARGB32(),
       'customTextColor': customTextColor.toARGB32(),
       'isCustomColors': isCustomColors ? 1 : 0,
+      'backgroundImagePath': backgroundImagePath,
+      'backgroundFit': backgroundFit.name,
+      'backgroundDimming': backgroundDimming,
+      'backgroundBlur': backgroundBlur,
+      'isAssetBackground': isAssetBackground ? 1 : 0,
+      'backgroundRotation': backgroundRotation,
     };
   }
 
@@ -96,6 +128,15 @@ class ReaderThemeSettings {
           ? Color(map['customTextColor'])
           : const Color(0xFF2E2620),
       isCustomColors: map['isCustomColors'] == 1,
+      backgroundImagePath: map['backgroundImagePath'] as String?,
+      backgroundFit: ReaderBackgroundFit.values.firstWhere(
+        (e) => e.name == map['backgroundFit'],
+        orElse: () => ReaderBackgroundFit.cover,
+      ),
+      backgroundDimming: (map['backgroundDimming'] as num?)?.toDouble() ?? 0.35,
+      backgroundBlur: (map['backgroundBlur'] as num?)?.toDouble() ?? 0.0,
+      isAssetBackground: map['isAssetBackground'] == 1,
+      backgroundRotation: (map['backgroundRotation'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -111,6 +152,13 @@ class ReaderThemeSettings {
     Color? customBackgroundColor,
     Color? customTextColor,
     bool? isCustomColors,
+    String? backgroundImagePath,
+    bool clearBackgroundImage = false,
+    ReaderBackgroundFit? backgroundFit,
+    double? backgroundDimming,
+    double? backgroundBlur,
+    bool? isAssetBackground,
+    int? backgroundRotation,
   }) {
     return ReaderThemeSettings(
       fontFamily: fontFamily ?? this.fontFamily,
@@ -124,6 +172,12 @@ class ReaderThemeSettings {
       customBackgroundColor: customBackgroundColor ?? this.customBackgroundColor,
       customTextColor: customTextColor ?? this.customTextColor,
       isCustomColors: isCustomColors ?? this.isCustomColors,
+      backgroundImagePath: clearBackgroundImage ? null : (backgroundImagePath ?? this.backgroundImagePath),
+      backgroundFit: backgroundFit ?? this.backgroundFit,
+      backgroundDimming: backgroundDimming ?? this.backgroundDimming,
+      backgroundBlur: backgroundBlur ?? this.backgroundBlur,
+      isAssetBackground: clearBackgroundImage ? false : (isAssetBackground ?? this.isAssetBackground),
+      backgroundRotation: clearBackgroundImage ? 0 : (backgroundRotation ?? this.backgroundRotation),
     );
   }
 }

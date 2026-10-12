@@ -2,10 +2,52 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/book_item.dart';
 import '../../providers/library_provider.dart';
+import '../../screens/reading_stats_screen.dart';
+import '../../services/backup_service.dart';
+import '../../services/feedback_service.dart';
+import '../../services/update_service.dart';
 import '../../theme/app_theme.dart';
+import '../common/about_dialog.dart';
+import '../common/app_logo.dart';
+import '../common/update_dialog.dart';
 
 class ShelvesSidebar extends StatelessWidget {
   const ShelvesSidebar({super.key});
+
+  void _checkForUpdateManual(BuildContext context) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            ),
+            SizedBox(width: 12),
+            Text('Проверка обновлений на GitHub...'),
+          ],
+        ),
+        duration: Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    final info = await UpdateService.checkForUpdate();
+    if (!context.mounted) return;
+
+    if (info.hasUpdate) {
+      UpdateDialog.show(context, info);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('У вас установлена последняя версия (v${info.currentVersion}) 👍'),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: Colors.green.shade700,
+        ),
+      );
+    }
+  }
 
   void _showCreateShelfDialog(BuildContext context) {
     final textController = TextEditingController();
@@ -46,6 +88,62 @@ class ShelvesSidebar extends StatelessWidget {
     );
   }
 
+  void _showBackupOptionsSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.backup_rounded, color: AppTheme.primaryPinkDark, size: 24),
+                  SizedBox(width: 10),
+                  Text(
+                    'Резервная копия данных',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Сохраните всю библиотеку, сессии чтения и цитаты в файл перед переустановкой приложения.',
+                style: TextStyle(fontSize: 13, color: Colors.grey),
+              ),
+              const SizedBox(height: 18),
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                tileColor: AppTheme.primaryPink.withValues(alpha: 0.12),
+                leading: const Icon(Icons.file_upload_rounded, color: AppTheme.primaryPinkDark),
+                title: const Text('Создать копию (Экспорт в JSON)', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Сохранить файл в Загрузки и скопировать'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  BackupService.exportBackup(context);
+                },
+              ),
+              const SizedBox(height: 10),
+              ListTile(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                tileColor: Colors.black.withValues(alpha: 0.04),
+                leading: const Icon(Icons.file_download_rounded, color: Colors.blueAccent),
+                title: const Text('Восстановить из файла (Импорт)', style: TextStyle(fontWeight: FontWeight.bold)),
+                subtitle: const Text('Выбрать сохраненный .json файл'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  BackupService.importBackup(context);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,14 +172,7 @@ class ShelvesSidebar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
             child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(7),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryPink.withValues(alpha: 0.25),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.auto_stories_rounded, color: AppTheme.primaryPinkDark, size: 20),
-                ),
+                const AppLogo(size: 30, borderRadius: 8),
                 const SizedBox(width: 12),
                 const Text(
                   'LiReader',
@@ -123,6 +214,19 @@ class ShelvesSidebar extends StatelessWidget {
                   count: library.allBooks.where((b) => b.isFavorite).length,
                   isSelected: activeFilter == LibraryFilter.favorites,
                   onTap: () => library.setFilter(LibraryFilter.favorites),
+                ),
+                _buildNavItem(
+                  context: context,
+                  title: 'Статистика',
+                  icon: Icons.insights_rounded,
+                  count: null,
+                  isSelected: false,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const ReadingStatsScreen()),
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 20),
@@ -250,6 +354,89 @@ class ShelvesSidebar extends StatelessWidget {
             ),
           ),
 
+          const Divider(height: 1),
+
+          // Footer: Developer WhatsApp & About Dialog
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(bottom: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF25D366).withValues(alpha: isDark ? 0.15 : 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: const Color(0xFF25D366).withValues(alpha: 0.35),
+                      width: 1,
+                    ),
+                  ),
+                  child: ListTile(
+                    dense: true,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    leading: const Icon(Icons.chat_rounded, color: Color(0xFF25D366), size: 19),
+                    title: const Text(
+                      'Написать автору',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF25D366),
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'WhatsApp (+7 708 715 35 37)',
+                      style: TextStyle(fontSize: 10, color: Colors.grey),
+                    ),
+                    onTap: () => FeedbackService.openDeveloperWhatsApp(context),
+                  ),
+                ),
+                ListTile(
+                  dense: true,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  leading: const Icon(Icons.backup_rounded, size: 20, color: AppTheme.primaryPinkDark),
+                  title: const Text(
+                    'Резервная копия',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Экспорт / Импорт данных',
+                    style: TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                  onTap: () => _showBackupOptionsSheet(context),
+                ),
+                ListTile(
+                  dense: true,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  leading: const Icon(Icons.system_update_rounded, size: 20, color: AppTheme.primaryPinkDark),
+                  title: const Text(
+                    'Проверить обновления',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: const Text(
+                    'Поиск новой версии на GitHub',
+                    style: TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+                  onTap: () => _checkForUpdateManual(context),
+                ),
+                ListTile(
+                  dense: true,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  leading: const Icon(Icons.info_outline_rounded, size: 20),
+                  title: const Text(
+                    'О приложении',
+                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
+                  ),
+                  trailing: const Text(
+                    'v1.0.0',
+                    style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+                  ),
+                  onTap: () => AboutLiReaderDialog.show(context),
+                ),
+              ],
+            ),
+          ),
+
         ],
       ),
     ),
@@ -260,7 +447,7 @@ class ShelvesSidebar extends StatelessWidget {
     required BuildContext context,
     required String title,
     required IconData icon,
-    required int count,
+    int? count,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
@@ -291,7 +478,7 @@ class ShelvesSidebar extends StatelessWidget {
             color: isSelected ? AppTheme.primaryPinkDark : null,
           ),
         ),
-        trailing: count > 0
+        trailing: (count != null && count > 0)
             ? Text(
                 '$count',
                 style: TextStyle(
