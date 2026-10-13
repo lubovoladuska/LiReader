@@ -10,6 +10,8 @@ import '../../providers/reader_provider.dart';
 import '../../services/book_parser_service.dart';
 import '../../theme/app_theme.dart';
 import 'highlight_context_menu.dart';
+import 'quote_card_dialog.dart';
+import '../../services/tts_service.dart';
 
 class ChapterContentView extends StatefulWidget {
   final int chapterIndex;
@@ -49,6 +51,7 @@ class _ChapterContentViewState extends State<ChapterContentView> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    TtsService.instance.currentParagraphNotifier.addListener(_onTtsParagraphChanged);
 
     // Restore scroll position after layout
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -75,9 +78,35 @@ class _ChapterContentViewState extends State<ChapterContentView> {
     }
   }
 
+  void _onTtsParagraphChanged() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final reader = context.read<ReaderProvider>();
+    if (reader.currentChapterIndex != widget.chapterIndex) return;
+
+    final currentPIdx = TtsService.instance.currentParagraphIndex;
+    if (currentPIdx < 0) return;
+
+    final paragraphs = reader.getChapterParagraphs(widget.chapterIndex);
+    if (currentPIdx >= paragraphs.length) return;
+
+    final sanitized = BookParserService.sanitizeReadingText(widget.content);
+    final targetP = paragraphs[currentPIdx];
+    final foundIdx = sanitized.indexOf(targetP);
+    if (foundIdx != -1 && sanitized.isNotEmpty) {
+      final frac = (foundIdx / sanitized.length).clamp(0.0, 1.0);
+      final max = _scrollController.position.maxScrollExtent;
+      final targetOffset = (frac * max).clamp(0.0, max);
+      _scrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
 
   @override
   void dispose() {
+    TtsService.instance.currentParagraphNotifier.removeListener(_onTtsParagraphChanged);
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
     super.dispose();
@@ -228,6 +257,21 @@ class _ChapterContentViewState extends State<ChapterContentView> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: AppTheme.primaryPinkDark),
+                    label: const Text('Цитата ✨'),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      QuoteCardDialog.show(
+                        context,
+                        quoteText: highlight.selectedText.trim(),
+                        bookTitle: reader.book.title,
+                        author: reader.book.author,
+                        themeSettings: reader.themeSettings,
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
                   TextButton.icon(
                     icon: const Icon(Icons.copy_rounded, size: 16),
                     label: const Text('Копировать'),
@@ -255,15 +299,34 @@ class _ChapterContentViewState extends State<ChapterContentView> {
     );
   }
 
-  /// Builds TextSpans with inline highlights painted onto matching text
+  /// Builds TextSpans with inline highlights and live TTS paragraph glow
   List<TextSpan> _buildHighlightedSpans(
     BuildContext context,
     String fullText,
     List<BookHighlight> highlights,
     Color baseTextColor,
-    ReaderProvider reader,
-  ) {
-    if (highlights.isEmpty) {
+    ReaderProvider reader, {
+    int activeTtsParagraphIndex = -1,
+  }) {
+    int ttsStart = -1;
+    int ttsEnd = -1;
+    final isTtsOnThisChapter = (TtsService.instance.isPlaying || TtsService.instance.isPaused) &&
+        reader.currentChapterIndex == widget.chapterIndex &&
+        activeTtsParagraphIndex >= 0;
+
+    if (isTtsOnThisChapter) {
+      final paragraphs = reader.getChapterParagraphs(widget.chapterIndex);
+      if (activeTtsParagraphIndex < paragraphs.length) {
+        final targetP = paragraphs[activeTtsParagraphIndex];
+        final found = fullText.indexOf(targetP);
+        if (found != -1) {
+          ttsStart = found;
+          ttsEnd = found + targetP.length;
+        }
+      }
+    }
+
+    if (highlights.isEmpty && ttsStart == -1) {
       return [TextSpan(text: fullText, style: TextStyle(color: baseTextColor))];
     }
 
@@ -286,6 +349,21 @@ class _ChapterContentViewState extends State<ChapterContentView> {
       }
     }
 
+    if (ttsStart != -1 && ttsEnd > ttsStart) {
+      intervals.add(_HighlightInterval(
+        start: ttsStart,
+        end: ttsEnd,
+        highlight: BookHighlight(
+          id: 'tts_active_highlight',
+          bookId: reader.book.id,
+          chapterIndex: widget.chapterIndex,
+          selectedText: fullText.substring(ttsStart, ttsEnd),
+          colorValue: 0x4DFF4081,
+          createdAt: DateTime.now(),
+        ),
+      ));
+    }
+
     intervals.sort((a, b) => a.start.compareTo(b.start));
 
     for (final interval in intervals) {
@@ -298,17 +376,21 @@ class _ChapterContentViewState extends State<ChapterContentView> {
         ));
       }
 
+      final isTtsSpan = interval.highlight.id == 'tts_active_highlight';
+
       spans.add(TextSpan(
         text: fullText.substring(interval.start, interval.end),
         style: TextStyle(
-          color: Colors.black87,
-          backgroundColor: Color(interval.highlight.colorValue).withValues(alpha: 0.65),
-          fontWeight: FontWeight.w500,
+          color: isTtsSpan ? baseTextColor : Colors.black87,
+          backgroundColor: Color(interval.highlight.colorValue),
+          fontWeight: isTtsSpan ? FontWeight.w600 : FontWeight.w500,
         ),
-        recognizer: TapGestureRecognizer()
-          ..onTap = () {
-            _showHighlightActionSheet(context, interval.highlight, reader);
-          },
+        recognizer: isTtsSpan
+            ? null
+            : (TapGestureRecognizer()
+              ..onTap = () {
+                _showHighlightActionSheet(context, interval.highlight, reader);
+              }),
       ));
 
       cursor = interval.end;
@@ -451,17 +533,21 @@ class _ChapterContentViewState extends State<ChapterContentView> {
                           ),
                         ),
 
-                      // Chapter Content with rich styling
-                      SelectableText.rich(
-                        TextSpan(
-                          children: _buildHighlightedSpans(
-                            context,
-                            sanitizedContent,
-                            chapterHighlights,
-                            textColor,
-                            reader,
-                          ),
-                        ),
+                      // Chapter Content with rich styling & live TTS glow
+                      ValueListenableBuilder<int>(
+                        valueListenable: TtsService.instance.currentParagraphNotifier,
+                        builder: (context, activePIdx, _) {
+                          return SelectableText.rich(
+                            TextSpan(
+                              children: _buildHighlightedSpans(
+                                context,
+                                sanitizedContent,
+                                chapterHighlights,
+                                textColor,
+                                reader,
+                                activeTtsParagraphIndex: activePIdx,
+                              ),
+                            ),
                         onTap: () => _handleTap(reader),
                         textAlign: settings.textAlign,
                         style: TextStyle(
@@ -517,11 +603,23 @@ class _ChapterContentViewState extends State<ChapterContentView> {
                                 );
                               }
                             },
+                            onShareQuote: () {
+                              editableTextState.hideToolbar();
+                              QuoteCardDialog.show(
+                                context,
+                                quoteText: selectedText.trim(),
+                                bookTitle: reader.book.title,
+                                author: reader.book.author,
+                                themeSettings: reader.themeSettings,
+                              );
+                            },
                           ),
                         ],
                       );
                     },
-                  ),
+                  );
+                },
+              ),
 
                   // Bottom navigation for chapters
                   const SizedBox(height: 36),

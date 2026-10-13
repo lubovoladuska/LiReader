@@ -32,10 +32,42 @@ class ChangelogService {
   /// History of all releases. Add new versions to the top of this list.
   static const List<ReleaseNote> releases = [
     ReleaseNote(
+      version: '1.1.0',
+      date: 'Октябрь 2026',
+      headline: 'Озвучка текста голосом (TTS) и дизайнерские карточки цитат',
+      isLatest: true,
+      items: [
+        ChangelogItem(
+          icon: Icons.headphones_rounded,
+          title: 'Озвучка книг голосом (Text-to-Speech)',
+          description:
+              'Слушайте книги в дороге или перед сном! Компактный плавающий плеер, регулировка скорости от 0.75x до 2.0x, переход по абзацам и чтение при выключенном экране.',
+        ),
+        ChangelogItem(
+          icon: Icons.record_voice_over_rounded,
+          title: 'Умная подсветка и автоскролл при чтении',
+          description:
+              'При воспроизведении озвучки читаемый абзац мягко подсвечивается акцентным цветом, а страница книги плавно прокручивается следом за голосом.',
+        ),
+        ChangelogItem(
+          icon: Icons.format_quote_rounded,
+          title: 'Генератор карточек цитат для соцсетей',
+          description:
+              'Выделите любую фразу в книге и создайте красивую открытку в 1 клик. 4 авторских стиля оформления, форматы 1:1 (пост) и 9:16 (Stories) и экспорт в Telegram или WhatsApp.',
+        ),
+        ChangelogItem(
+          icon: Icons.auto_stories_rounded,
+          title: 'Автоматический переход по главам в аудио',
+          description:
+              'При завершении текущей главы воспроизведение автоматически переходит к следующей без необходимости доставать телефон.',
+        ),
+      ],
+    ),
+    ReleaseNote(
       version: '1.0.1',
       date: 'Октябрь 2026',
       headline: 'Поддержка FB2, честная статистика и GitHub обновления',
-      isLatest: true,
+      isLatest: false,
       items: [
         ChangelogItem(
           icon: Icons.menu_book_rounded,

@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../models/book_item.dart';
 import '../providers/library_provider.dart';
 import '../providers/reader_provider.dart';
+import '../services/tts_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/reader/book_notes_sidebar.dart';
 import '../widgets/reader/book_search_sheet.dart';
@@ -15,6 +16,7 @@ import '../widgets/reader/chapter_content_view.dart';
 import '../widgets/reader/chapter_picker_dialog.dart';
 import '../widgets/reader/reader_theme_settings_sheet.dart';
 import '../widgets/reader/sleep_timer_dialog.dart';
+import '../widgets/reader/tts_mini_player.dart';
 import 'wallpaper_customization_screen.dart';
 
 class ReaderScreen extends StatefulWidget {
@@ -71,7 +73,13 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
 
   void _onPageChanged(int index, ReaderProvider reader) {
-    reader.setChapter(index);
+    if (reader.currentChapterIndex != index) {
+      final wasPlayingOrPaused = TtsService.instance.isPlaying || TtsService.instance.isPaused;
+      reader.setChapter(index);
+      if (wasPlayingOrPaused) {
+        reader.startTts(startParagraph: 0);
+      }
+    }
     context.read<LibraryProvider>().updateProgress(widget.book.id, index, 0.0);
   }
 
@@ -215,6 +223,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
           _updateSystemUI(reader.isMenuVisible);
           final isDesktop = MediaQuery.of(context).size.width > 700;
+
+          if (_pageController.hasClients &&
+              _pageController.positions.isNotEmpty &&
+              _pageController.page?.round() != reader.currentChapterIndex) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_pageController.hasClients &&
+                  _pageController.positions.isNotEmpty &&
+                  _pageController.page?.round() != reader.currentChapterIndex) {
+                _pageController.jumpToPage(reader.currentChapterIndex);
+              }
+            });
+          }
 
           return Scaffold(
             key: _scaffoldKey,
@@ -411,12 +431,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                         case 'search':
                                           _showSearchSheet(context, reader);
                                           break;
+                                        case 'tts':
+                                          reader.startTts();
+                                          break;
                                         case 'sleep':
                                           _showSleepTimerDialog(context, reader);
                                           break;
                                       }
                                     },
                                     itemBuilder: (ctx) => [
+                                      if (widget.book.format != BookFormat.pdf)
+                                        const PopupMenuItem(
+                                          value: 'tts',
+                                          child: Row(
+                                            children: [
+                                              Icon(Icons.headphones_rounded, size: 20, color: AppTheme.primaryPinkDark),
+                                              SizedBox(width: 12),
+                                              Text('Озвучка книги (TTS)'),
+                                            ],
+                                          ),
+                                        ),
                                       if (widget.book.format != BookFormat.pdf)
                                         const PopupMenuItem(
                                           value: 'toc',
@@ -747,6 +781,22 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                 ),
                               ),
                             ),
+                          ),
+                        ),
+
+                      // Floating TTS Mini Player
+                      if (widget.book.format != BookFormat.pdf)
+                        AnimatedPositioned(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeInOutCubic,
+                          left: 0,
+                          right: 0,
+                          bottom: (chapters.length > 1 && reader.isMenuVisible)
+                              ? 142
+                              : 28,
+                          child: TtsMiniPlayer(
+                            totalParagraphs: reader.getChapterParagraphs(reader.currentChapterIndex).length,
+                            onClose: () => reader.stopTts(),
                           ),
                         ),
 

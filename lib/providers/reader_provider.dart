@@ -10,6 +10,7 @@ import '../models/search_result.dart';
 import '../services/book_parser_service.dart';
 import '../services/database_helper.dart';
 import '../services/image_utils.dart';
+import '../services/tts_service.dart';
 
 class ReaderProvider extends ChangeNotifier {
   final BookItem book;
@@ -52,6 +53,7 @@ class ReaderProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    TtsService.instance.stop();
     _sessionAutoFlushTimer?.cancel();
     _sleepTimer?.cancel();
     _flushReadingSession();
@@ -542,6 +544,49 @@ class ReaderProvider extends ChangeNotifier {
   Future<void> deleteHighlight(String id) async {
     await _dbHelper.deleteHighlight(id);
     _highlights.removeWhere((h) => h.id == id);
+    notifyListeners();
+  }
+
+  // --- TTS (Text-to-Speech) Audio Reading ---
+
+  List<String> getChapterParagraphs(int chapterIndex) {
+    if (_parsedData == null || chapterIndex < 0 || chapterIndex >= _parsedData!.chapters.length) {
+      return [];
+    }
+    final content = _parsedData!.chapters[chapterIndex].content;
+    final paragraphs = content
+        .split(RegExp(r'\n{2,}'))
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+    if (paragraphs.isNotEmpty) return paragraphs;
+
+    return content
+        .split('\n')
+        .map((p) => p.trim())
+        .where((p) => p.isNotEmpty)
+        .toList();
+  }
+
+  void startTts({int startParagraph = 0}) {
+    final paragraphs = getChapterParagraphs(_currentChapterIndex);
+    if (paragraphs.isEmpty) return;
+
+    TtsService.instance.playChapter(
+      paragraphs,
+      startIndex: startParagraph,
+      onChapterFinished: () {
+        if (_currentChapterIndex + 1 < totalChapters) {
+          setChapter(_currentChapterIndex + 1);
+          startTts(startParagraph: 0);
+        }
+      },
+    );
+    notifyListeners();
+  }
+
+  void stopTts() {
+    TtsService.instance.stop();
     notifyListeners();
   }
 }

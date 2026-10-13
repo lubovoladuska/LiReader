@@ -6,6 +6,7 @@ class HighlightToolbar extends StatelessWidget {
   final VoidCallback onCopy;
   final Function(int colorValue) onColorSelected;
   final VoidCallback? onClearHighlight;
+  final VoidCallback? onShareQuote;
 
   const HighlightToolbar({
     super.key,
@@ -13,6 +14,7 @@ class HighlightToolbar extends StatelessWidget {
     required this.onCopy,
     required this.onColorSelected,
     this.onClearHighlight,
+    this.onShareQuote,
   });
 
   @override
@@ -103,6 +105,16 @@ class HighlightToolbar extends StatelessWidget {
                 color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
                 onPressed: onCopy,
               ),
+
+              if (onShareQuote != null) ...[
+                IconButton(
+                  icon: const Icon(Icons.auto_awesome_rounded, size: 17, color: AppTheme.primaryPinkDark),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Создать карточку цитаты',
+                  onPressed: onShareQuote,
+                ),
+              ],
 
               if (onClearHighlight != null) ...[
                 Container(
