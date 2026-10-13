@@ -87,6 +87,37 @@ class _ReadingStatsScreenState extends State<ReadingStatsScreen> {
             tooltip: 'Обновить',
             onPressed: _loadStats,
           ),
+          IconButton(
+            icon: const Icon(Icons.delete_sweep_rounded),
+            tooltip: 'Сбросить статистику',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  title: const Text('Сбросить статистику?'),
+                  content: const Text(
+                    'Вся история прочитанных сессий и глав будет очищена. Это позволит начать честный подсчет заново.',
+                  ),
+                  actions: [
+                    TextButton(
+                      child: const Text('Отмена'),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                    FilledButton(
+                      style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+                      child: const Text('Сбросить'),
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        await _dbHelper.clearReadingStats();
+                        _loadStats();
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         ],
       ),
       body: _isLoading

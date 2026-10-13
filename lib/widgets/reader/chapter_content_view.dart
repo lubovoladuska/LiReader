@@ -37,6 +37,7 @@ class _ChapterContentViewState extends State<ChapterContentView> {
   DateTime _lastTapTime = DateTime.fromMillisecondsSinceEpoch(0);
 
   void _handleTap(ReaderProvider reader) {
+    reader.registerUserActivity();
     final now = DateTime.now();
     if (now.difference(_lastTapTime).inMilliseconds > 300) {
       _lastTapTime = now;

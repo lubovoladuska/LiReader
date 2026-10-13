@@ -24,10 +24,12 @@ class ReaderProvider extends ChangeNotifier {
   List<BookHighlight> _highlights = [];
   ReaderThemeSettings _themeSettings = const ReaderThemeSettings();
 
-  // --- Reading Session Tracking ---
+  // --- Reading Session Tracking & Accuracy ---
   DateTime _sessionStartTime = DateTime.now();
+  DateTime _lastUserActivityTime = DateTime.now();
   int _sessionWordsRead = 0;
   int _sessionPagesRead = 0;
+  Set<int> _completedChapterIndices = {};
   Timer? _sessionAutoFlushTimer;
 
   // --- In-Book Search ---
@@ -102,6 +104,7 @@ class ReaderProvider extends ChangeNotifier {
     try {
       _parsedData = await BookParserService.parseBook(book);
       _highlights = await _dbHelper.getHighlightsForBook(book.id);
+      _completedChapterIndices = await _dbHelper.getCompletedChapterIndices(book.id);
 
       // Load persisted global theme settings
       final settingsJson = await _dbHelper.getSetting('reader_theme_settings');
@@ -157,42 +160,76 @@ class ReaderProvider extends ChangeNotifier {
     }
   }
 
+  void registerUserActivity() {
+    _lastUserActivityTime = DateTime.now();
+  }
+
+  int _getChapterWordCount(int chapterIndex) {
+    if (_parsedData == null || chapterIndex < 0 || chapterIndex >= _parsedData!.chapters.length) {
+      return 0;
+    }
+    final content = _parsedData!.chapters[chapterIndex].content;
+    return content.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
+  }
+
+  Future<void> _checkAndMarkChapterCompleted(int chapterIndex) async {
+    if (_completedChapterIndices.contains(chapterIndex)) return;
+    if (_parsedData == null || chapterIndex < 0 || chapterIndex >= _parsedData!.chapters.length) return;
+
+    final words = _getChapterWordCount(chapterIndex);
+    final success = await _dbHelper.markChapterCompleted(
+      bookId: book.id,
+      chapterIndex: chapterIndex,
+      wordsCount: words,
+    );
+    if (success) {
+      _completedChapterIndices.add(chapterIndex);
+      _sessionWordsRead += words;
+      _sessionPagesRead++;
+    }
+  }
+
   void setChapter(int index) {
+    registerUserActivity();
     if (index >= 0 && index < totalChapters) {
-      if (_currentChapterIndex != index) {
-        _sessionPagesRead++;
-        if (_parsedData != null && index < _parsedData!.chapters.length) {
-          final words = _parsedData!.chapters[index].content.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).length;
-          _sessionWordsRead += (words > 0 ? (words * 0.7).toInt() : 120);
-        }
+      if (index > _currentChapterIndex && _chapterScrollProgress >= 0.50) {
+        _checkAndMarkChapterCompleted(_currentChapterIndex);
       }
       _currentChapterIndex = index;
+      _chapterScrollProgress = 0.0;
       _dbHelper.updateBookProgress(book.id, index, 0.0);
       notifyListeners();
     }
   }
 
   void saveScrollProgress(double offset, {double fractional = 0.0}) {
-    final oldProgress = _chapterScrollProgress;
+    registerUserActivity();
     _chapterScrollProgress = fractional.clamp(0.0, 1.0);
-    final delta = (_chapterScrollProgress - oldProgress).abs();
-    if (delta > 0.05 && _parsedData != null && _currentChapterIndex < _parsedData!.chapters.length) {
-      final wordsInCh = _parsedData!.chapters[_currentChapterIndex].content.split(RegExp(r'\s+')).length;
-      _sessionWordsRead += (delta * wordsInCh).round();
+    if (_chapterScrollProgress >= 0.92) {
+      _checkAndMarkChapterCompleted(_currentChapterIndex);
     }
     _dbHelper.updateBookProgress(book.id, _currentChapterIndex, offset);
     notifyListeners();
   }
 
-  // --- Reading Session Tracking ---
+  // --- Reading Session Tracking & Idle Detection ---
 
   void _flushReadingSession() {
-    final elapsedSecs = DateTime.now().difference(_sessionStartTime).inSeconds;
-    if (elapsedSecs >= 3 || _sessionWordsRead > 0 || _sessionPagesRead > 0) {
+    final now = DateTime.now();
+    final idleSeconds = now.difference(_lastUserActivityTime).inSeconds;
+    final totalElapsed = now.difference(_sessionStartTime).inSeconds;
+
+    // Discard inactivity periods exceeding 90 seconds (screen left open on table)
+    int activeDuration = totalElapsed;
+    if (idleSeconds > 90) {
+      activeDuration = (totalElapsed - (idleSeconds - 90)).clamp(0, 86400);
+    }
+
+    if (activeDuration >= 5 || _sessionWordsRead > 0 || _sessionPagesRead > 0) {
       _dbHelper.recordReadingSession(
         bookId: book.id,
         bookTitle: book.title,
-        durationSeconds: elapsedSecs,
+        durationSeconds: activeDuration,
         wordsRead: _sessionWordsRead,
         pagesRead: _sessionPagesRead,
       );

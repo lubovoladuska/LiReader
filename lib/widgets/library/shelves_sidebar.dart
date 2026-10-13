@@ -428,7 +428,7 @@ class ShelvesSidebar extends StatelessWidget {
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
                   ),
                   trailing: const Text(
-                    'v1.0.0',
+                    'v1.0.1',
                     style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
                   ),
                   onTap: () => AboutLiReaderDialog.show(context),

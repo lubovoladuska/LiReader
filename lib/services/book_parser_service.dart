@@ -121,6 +121,7 @@ class BookParserService {
   static Future<BookItem> createBookItemFromFile(String filePath) async {
     final permanentPath = await copyToPermanentStorage(filePath);
     final ext = p.extension(permanentPath).toLowerCase();
+    final lowerPath = permanentPath.toLowerCase();
     final fileName = p.basenameWithoutExtension(permanentPath);
 
     BookFormat format = BookFormat.unknown;
@@ -137,13 +138,37 @@ class BookParserService {
       author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
       totalUnits = parsed.chapters.length;
       coverPath = await _extractEpubCover(permanentPath);
-    } else if (ext == '.fb2') {
+    } else if (ext == '.fb2' || lowerPath.endsWith('.fb2.zip')) {
       format = BookFormat.fb2;
       final parsed = await parseFb2(permanentPath);
       title = parsed.title.isNotEmpty ? parsed.title : fileName;
       author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
       totalUnits = parsed.chapters.length;
       coverPath = await _extractFb2Cover(permanentPath);
+    } else if (ext == '.zip') {
+      try {
+        final bytes = await File(permanentPath).readAsBytes();
+        final archive = ZipDecoder().decodeBytes(bytes);
+        final hasFb2 = archive.files.any((f) => f.name.toLowerCase().endsWith('.fb2'));
+        final hasEpub = archive.files.any((f) => f.name.toLowerCase().endsWith('.opf') || f.name.toLowerCase().endsWith('.ncx'));
+        if (hasFb2) {
+          format = BookFormat.fb2;
+          final parsed = await parseFb2(permanentPath);
+          title = parsed.title.isNotEmpty ? parsed.title : fileName;
+          author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
+          totalUnits = parsed.chapters.length;
+          coverPath = await _extractFb2Cover(permanentPath);
+        } else if (hasEpub) {
+          format = BookFormat.epub;
+          final parsed = await parseEpub(permanentPath);
+          title = parsed.title.isNotEmpty ? parsed.title : fileName;
+          author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
+          totalUnits = parsed.chapters.length;
+          coverPath = await _extractEpubCover(permanentPath);
+        }
+      } catch (e) {
+        debugPrint('Error inspecting ZIP container: $e');
+      }
     } else if (ext == '.txt') {
       format = BookFormat.txt;
       final parsed = await parseTxt(permanentPath);
@@ -286,43 +311,119 @@ class BookParserService {
     return null;
   }
 
-  static Future<String?> _extractFb2Cover(String filePath) async {
-    try {
-      final bytes = await File(filePath).readAsBytes();
-      final content = utf8.decode(bytes, allowMalformed: true);
-      final xml = XmlDocument.parse(content);
-
-      // Find coverpage image reference in title-info
-      final coverpage = xml.findAllElements('coverpage').firstOrNull;
-      String? imageId;
-      if (coverpage != null) {
-        final imageElem = coverpage.findAllElements('image').firstOrNull;
-        if (imageElem != null) {
-          final href = imageElem.getAttribute('l:href') ?? imageElem.getAttribute('xlink:href') ?? imageElem.getAttribute('href');
-          if (href != null) {
-            imageId = href.startsWith('#') ? href.substring(1) : href;
+  static Future<List<int>> _loadFb2Bytes(String filePath) async {
+    final file = File(filePath);
+    final bytes = await file.readAsBytes();
+    if (bytes.length >= 4 &&
+        bytes[0] == 0x50 &&
+        bytes[1] == 0x4B &&
+        bytes[2] == 0x03 &&
+        bytes[3] == 0x04) {
+      // It's a ZIP archive (.fb2.zip or .zip)
+      try {
+        final archive = ZipDecoder().decodeBytes(bytes);
+        ArchiveFile? fb2File;
+        for (final f in archive.files) {
+          if (f.name.toLowerCase().endsWith('.fb2')) {
+            fb2File = f;
+            break;
           }
         }
+        if (fb2File == null) {
+          for (final f in archive.files) {
+            if (f.isFile && (fb2File == null || f.size > fb2File.size)) {
+              fb2File = f;
+            }
+          }
+        }
+        if (fb2File != null && fb2File.content != null) {
+          return fb2File.content as List<int>;
+        }
+      } catch (e) {
+        debugPrint('Error unpacking ZIP for FB2: $e');
+      }
+    }
+    return bytes;
+  }
+
+  static String _decodeCp1251(List<int> bytes) {
+    const cp1251Table = <int, int>{
+      0x80: 0x0402, 0x81: 0x0403, 0x82: 0x201A, 0x83: 0x0453,
+      0x84: 0x201E, 0x85: 0x2026, 0x86: 0x2020, 0x87: 0x2021,
+      0x88: 0x20AC, 0x89: 0x2030, 0x8A: 0x0409, 0x8B: 0x2039,
+      0x8C: 0x040A, 0x8D: 0x040C, 0x8E: 0x040B, 0x8F: 0x040F,
+      0x90: 0x0452, 0x91: 0x2018, 0x92: 0x2019, 0x93: 0x201C,
+      0x94: 0x201D, 0x95: 0x2022, 0x96: 0x2013, 0x97: 0x2014,
+      0x99: 0x2122, 0x9A: 0x0459, 0x9B: 0x203A, 0x9C: 0x045A,
+      0x9D: 0x045C, 0x9E: 0x045B, 0x9F: 0x045F, 0xA0: 0x00A0,
+      0xA1: 0x040E, 0xA2: 0x045E, 0xA3: 0x0408, 0xA4: 0x00A4,
+      0xA5: 0x0490, 0xA6: 0x00A6, 0xA7: 0x00A7, 0xA8: 0x0401,
+      0xA9: 0x00A9, 0xAA: 0x0404, 0xAB: 0x00AB, 0xAC: 0x00AC,
+      0xAD: 0x00AD, 0xAE: 0x00AE, 0xAF: 0x0407, 0xB0: 0x00B0,
+      0xB1: 0x00B1, 0xB2: 0x0406, 0xB3: 0x0456, 0xB4: 0x0491,
+      0xB5: 0x00B5, 0xB6: 0x00B6, 0xB7: 0x00B7, 0xB8: 0x0451,
+      0xB9: 0x2116, 0xBA: 0x0454, 0xBB: 0x00BB, 0xBC: 0x0458,
+      0xBD: 0x0405, 0xBE: 0x0455, 0xBF: 0x0457,
+    };
+
+    final charCodes = <int>[];
+    for (final b in bytes) {
+      if (b < 0x80) {
+        charCodes.add(b);
+      } else if (b >= 0xC0 && b <= 0xFF) {
+        charCodes.add(0x0410 + (b - 0xC0));
+      } else {
+        charCodes.add(cp1251Table[b] ?? b);
+      }
+    }
+    return String.fromCharCodes(charCodes);
+  }
+
+  static String _decodeFb2Bytes(List<int> bytes) {
+    final prefixLen = bytes.length < 1024 ? bytes.length : 1024;
+    final prefix = ascii.decode(bytes.sublist(0, prefixLen), allowInvalid: true).toLowerCase();
+
+    final isCp1251 = prefix.contains('windows-1251') || prefix.contains('cp1251');
+    if (isCp1251) {
+      return _decodeCp1251(bytes);
+    }
+
+    try {
+      return utf8.decode(bytes, allowMalformed: false);
+    } catch (_) {
+      return _decodeCp1251(bytes);
+    }
+  }
+
+  static Future<String?> _extractFb2Cover(String filePath) async {
+    try {
+      final bytes = await _loadFb2Bytes(filePath);
+      final rawContent = _decodeFb2Bytes(bytes);
+
+      String? imageId;
+      final coverMatch = RegExp(r'<coverpage[^>]*>[\s\S]*?<image[^>]+href=["'']#?([^"'']+)["'']', caseSensitive: false).firstMatch(rawContent);
+      if (coverMatch != null) {
+        imageId = coverMatch.group(1);
       }
 
-      // Look in binary tags
-      final binaries = xml.findAllElements('binary');
-      for (final bin in binaries) {
-        final id = bin.getAttribute('id');
-        if (imageId != null && id == imageId) {
-          final base64Data = bin.innerText.replaceAll(RegExp(r'\s+'), '');
-          final imgBytes = base64Decode(base64Data);
-          final coversDir = await _getCoversDirectory();
-          final targetPath = p.join(coversDir.path, '${p.basenameWithoutExtension(filePath)}_cover.jpg');
-          await File(targetPath).writeAsBytes(imgBytes);
-          return targetPath;
+      String? base64Data;
+      if (imageId != null) {
+        final binMatch = RegExp('<binary[^>]+id=["\'](?:#)?${RegExp.escape(imageId)}["\'][^>]*>([\\s\\S]*?)</binary>', caseSensitive: false).firstMatch(rawContent);
+        if (binMatch != null) {
+          base64Data = binMatch.group(1);
         }
       }
 
-      // If specific cover not matched, pick first binary
-      if (binaries.isNotEmpty) {
-        final base64Data = binaries.first.innerText.replaceAll(RegExp(r'\s+'), '');
-        final imgBytes = base64Decode(base64Data);
+      if (base64Data == null) {
+        final firstBinMatch = RegExp(r'<binary[^>]*>([\s\S]*?)</binary>', caseSensitive: false).firstMatch(rawContent);
+        if (firstBinMatch != null) {
+          base64Data = firstBinMatch.group(1);
+        }
+      }
+
+      if (base64Data != null) {
+        final cleanBase64 = base64Data.replaceAll(RegExp(r'\s+'), '');
+        final imgBytes = base64Decode(cleanBase64);
         final coversDir = await _getCoversDirectory();
         final targetPath = p.join(coversDir.path, '${p.basenameWithoutExtension(filePath)}_cover.jpg');
         await File(targetPath).writeAsBytes(imgBytes);
@@ -550,71 +651,171 @@ class BookParserService {
     );
   }
 
-  static Future<BookParsedData> parseFb2(String filePath) async {
-    final bytes = await File(filePath).readAsBytes();
-    final content = utf8.decode(bytes, allowMalformed: true);
-    final xml = XmlDocument.parse(content);
+  static String _cleanFb2Xml(String rawXml) {
+    var text = rawXml;
+    text = text.replaceAll('&nbsp;', '&#160;');
+    text = text.replaceAll('&mdash;', '&#8212;');
+    text = text.replaceAll('&ndash;', '&#8211;');
+    text = text.replaceAll('&laquo;', '&#171;');
+    text = text.replaceAll('&raquo;', '&#187;');
+    text = text.replaceAll('&hellip;', '&#8230;');
+    text = text.replaceAll('&ensp;', '&#8194;');
+    text = text.replaceAll('&emsp;', '&#8195;');
+    text = text.replaceAll('&thinsp;', '&#8201;');
+    text = text.replaceAll('&copy;', '&#169;');
+    text = text.replaceAll('&reg;', '&#174;');
+    text = text.replaceAll('&deg;', '&#176;');
+    text = text.replaceAll('&plusmn;', '&#177;');
 
-    String title = p.basenameWithoutExtension(filePath);
+    // Fix unescaped ampersands that aren't valid XML entities
+    text = text.replaceAll(RegExp(r'&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)'), '&amp;');
+    return text;
+  }
+
+  static String _stripBinaryTags(String xml) {
+    return xml.replaceAll(RegExp(r'<binary[^>]*>[\s\S]*?</binary>', caseSensitive: false), '');
+  }
+
+  static BookParsedData _parseFb2RegexFallback(String rawXml, String fallbackTitle) {
+    String title = fallbackTitle;
     String author = 'Неизвестный автор';
 
-    final titleInfo = xml.findAllElements('title-info').firstOrNull;
-    if (titleInfo != null) {
-      final bookTitle = titleInfo.findAllElements('book-title').firstOrNull;
-      if (bookTitle != null) title = bookTitle.innerText.trim();
-
-      final authorElem = titleInfo.findAllElements('author').firstOrNull;
-      if (authorElem != null) {
-        final first = authorElem.findAllElements('first-name').firstOrNull?.innerText ?? '';
-        final last = authorElem.findAllElements('last-name').firstOrNull?.innerText ?? '';
-        author = '$first $last'.trim();
-      }
+    final titleMatch = RegExp(r'<book-title>([\s\S]*?)</book-title>', caseSensitive: false).firstMatch(rawXml);
+    if (titleMatch != null) {
+      final t = sanitizeReadingText(titleMatch.group(1)!);
+      if (t.isNotEmpty) title = t;
     }
 
+    final authorMatch = RegExp(r'<author>([\s\S]*?)</author>', caseSensitive: false).firstMatch(rawXml);
+    if (authorMatch != null) {
+      final aBlock = authorMatch.group(1)!;
+      final fn = RegExp(r'<first-name>([\s\S]*?)</first-name>', caseSensitive: false).firstMatch(aBlock)?.group(1) ?? '';
+      final ln = RegExp(r'<last-name>([\s\S]*?)</last-name>', caseSensitive: false).firstMatch(aBlock)?.group(1) ?? '';
+      final full = '${sanitizeReadingText(fn)} ${sanitizeReadingText(ln)}'.trim();
+      if (full.isNotEmpty) author = full;
+    }
+
+    final bodyMatch = RegExp(r'<body[^>]*>([\s\S]*?)</body>', caseSensitive: false).firstMatch(rawXml);
+    final bodyText = bodyMatch != null ? bodyMatch.group(1)! : rawXml;
+
     final chapters = <BookChapter>[];
-    final sections = xml.findAllElements('section');
+    final sectionMatches = RegExp(r'<section[^>]*>([\s\S]*?)</section>', caseSensitive: false).allMatches(bodyText);
+
     int idx = 0;
-
-    for (final sec in sections) {
-      final secTitle = sec.findAllElements('title').firstOrNull?.innerText.trim() ?? 'Глава ${idx + 1}';
-      final titleElem = sec.findElements('title').firstOrNull;
-
-      final paragraphs = <String>[];
-      for (final pElem in sec.findAllElements('p')) {
-        // Skip p elements that belong to <title>
-        if (titleElem != null && titleElem.descendants.contains(pElem)) continue;
-        final pText = sanitizeReadingText(pElem.innerText);
-        if (pText.isNotEmpty) {
-          paragraphs.add(pText);
-        }
+    for (final secMatch in sectionMatches) {
+      final secContent = secMatch.group(1)!;
+      final titleMatch = RegExp(r'<title[^>]*>([\s\S]*?)</title>', caseSensitive: false).firstMatch(secContent);
+      String secTitle = 'Глава ${idx + 1}';
+      if (titleMatch != null) {
+        final t = sanitizeReadingText(titleMatch.group(1)!.replaceAll(RegExp(r'<[^>]+>'), ' '));
+        if (t.isNotEmpty) secTitle = t;
       }
 
-      final content = sanitizeReadingText(paragraphs.join('\n\n'));
-      if (content.isNotEmpty) {
-        chapters.add(BookChapter(
-          index: idx,
-          title: secTitle,
-          content: content,
-        ));
+      final pMatches = RegExp(r'<p[^>]*>([\s\S]*?)</p>', caseSensitive: false).allMatches(secContent);
+      final paragraphs = <String>[];
+      for (final pm in pMatches) {
+        final pClean = sanitizeReadingText(pm.group(1)!.replaceAll(RegExp(r'<[^>]+>'), ' '));
+        if (pClean.isNotEmpty) paragraphs.add(pClean);
+      }
+
+      final chapterText = paragraphs.join('\n\n');
+      if (chapterText.isNotEmpty) {
+        chapters.add(BookChapter(index: idx, title: secTitle, content: chapterText));
         idx++;
       }
     }
 
     if (chapters.isEmpty) {
-      final body = xml.findAllElements('body').firstOrNull?.innerText ?? '';
-      final content = sanitizeReadingText(body);
+      final pMatches = RegExp(r'<p[^>]*>([\s\S]*?)</p>', caseSensitive: false).allMatches(bodyText);
+      final allPs = <String>[];
+      for (final pm in pMatches) {
+        final pClean = sanitizeReadingText(pm.group(1)!.replaceAll(RegExp(r'<[^>]+>'), ' '));
+        if (pClean.isNotEmpty) allPs.add(pClean);
+      }
+      final fullText = allPs.join('\n\n');
       chapters.add(BookChapter(
         index: 0,
         title: 'Начало книги',
-        content: content.isNotEmpty ? content : 'Пустой документ FB2',
+        content: fullText.isNotEmpty ? fullText : 'Пустой документ FB2',
       ));
     }
 
-    return BookParsedData(
-      title: title,
-      author: author,
-      chapters: chapters,
-    );
+    return BookParsedData(title: title, author: author, chapters: chapters);
+  }
+
+  static Future<BookParsedData> parseFb2(String filePath) async {
+    final bytes = await _loadFb2Bytes(filePath);
+    final rawContent = _decodeFb2Bytes(bytes);
+    final cleanContent = _cleanFb2Xml(rawContent);
+    final strippedContent = _stripBinaryTags(cleanContent);
+
+    try {
+      final xml = XmlDocument.parse(strippedContent);
+
+      String title = p.basenameWithoutExtension(filePath);
+      String author = 'Неизвестный автор';
+
+      final titleInfo = xml.findAllElements('title-info').firstOrNull;
+      if (titleInfo != null) {
+        final bookTitle = titleInfo.findAllElements('book-title').firstOrNull;
+        if (bookTitle != null) title = bookTitle.innerText.trim();
+
+        final authorElem = titleInfo.findAllElements('author').firstOrNull;
+        if (authorElem != null) {
+          final first = authorElem.findAllElements('first-name').firstOrNull?.innerText ?? '';
+          final last = authorElem.findAllElements('last-name').firstOrNull?.innerText ?? '';
+          final full = '$first $last'.trim();
+          if (full.isNotEmpty) author = full;
+        }
+      }
+
+      final chapters = <BookChapter>[];
+      final sections = xml.findAllElements('section');
+      int idx = 0;
+
+      for (final sec in sections) {
+        final secTitle = sec.findAllElements('title').firstOrNull?.innerText.trim() ?? 'Глава ${idx + 1}';
+        final titleElem = sec.findElements('title').firstOrNull;
+
+        final paragraphs = <String>[];
+        for (final pElem in sec.findAllElements('p')) {
+          if (titleElem != null && titleElem.descendants.contains(pElem)) continue;
+          final pText = sanitizeReadingText(pElem.innerText);
+          if (pText.isNotEmpty) {
+            paragraphs.add(pText);
+          }
+        }
+
+        final content = sanitizeReadingText(paragraphs.join('\n\n'));
+        if (content.isNotEmpty) {
+          chapters.add(BookChapter(
+            index: idx,
+            title: secTitle,
+            content: content,
+          ));
+          idx++;
+        }
+      }
+
+      if (chapters.isEmpty) {
+        final body = xml.findAllElements('body').firstOrNull?.innerText ?? '';
+        final content = sanitizeReadingText(body);
+        chapters.add(BookChapter(
+          index: 0,
+          title: 'Начало книги',
+          content: content.isNotEmpty ? content : 'Пустой документ FB2',
+        ));
+      }
+
+      return BookParsedData(
+        title: title,
+        author: author,
+        chapters: chapters,
+      );
+    } catch (e) {
+      debugPrint('XmlDocument.parse failed for FB2: $e. Falling back to regex parser.');
+      return _parseFb2RegexFallback(cleanContent, p.basenameWithoutExtension(filePath));
+    }
   }
 
   static String _decodeHtmlEntities(String text) {

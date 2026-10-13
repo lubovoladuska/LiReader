@@ -3,6 +3,7 @@ import '../../services/feedback_service.dart';
 import '../../services/update_service.dart';
 import '../../theme/app_theme.dart';
 import 'app_logo.dart';
+import 'changelog_sheet.dart';
 import 'update_dialog.dart';
 
 class AboutLiReaderDialog extends StatelessWidget {
@@ -41,19 +42,37 @@ class AboutLiReaderDialog extends StatelessWidget {
           ),
           const SizedBox(height: 4),
 
-          // Version badge
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: AppTheme.primaryPink.withValues(alpha: isDark ? 0.25 : 0.2),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Text(
-              'Версия 1.0.0 (Release)',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primaryPinkDark,
+          // Version badge (tap to see changelog)
+          InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              Navigator.pop(context);
+              ChangelogSheet.show(context);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryPink.withValues(alpha: isDark ? 0.25 : 0.2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppTheme.primaryPinkDark.withValues(alpha: 0.3),
+                  width: 1,
+                ),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome_rounded, size: 14, color: AppTheme.primaryPinkDark),
+                  SizedBox(width: 6),
+                  Text(
+                    'Версия 1.0.1 (Release) • Что нового?',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primaryPinkDark,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -107,6 +126,27 @@ class AboutLiReaderDialog extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 18),
+
+          // What's new Changelog CTA Button
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+              icon: const Icon(Icons.auto_awesome_rounded, size: 20, color: AppTheme.primaryPinkDark),
+              label: const Text(
+                'Что нового (История версий)',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              onPressed: () {
+                Navigator.pop(context);
+                ChangelogSheet.show(context);
+              },
+            ),
+          ),
+          const SizedBox(height: 10),
 
           // Check for Updates CTA Button
           SizedBox(

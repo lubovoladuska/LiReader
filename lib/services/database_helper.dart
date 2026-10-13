@@ -43,7 +43,7 @@ class DatabaseHelper {
     return await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 4,
+        version: 5,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       ),
@@ -111,6 +111,17 @@ class DatabaseHelper {
         FOREIGN KEY (bookId) REFERENCES books (id) ON DELETE CASCADE
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE completed_chapters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        bookId TEXT NOT NULL,
+        chapterIndex INTEGER NOT NULL,
+        wordsCount INTEGER NOT NULL,
+        completedAt INTEGER NOT NULL,
+        UNIQUE(bookId, chapterIndex) ON CONFLICT IGNORE
+      )
+    ''');
   }
 
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
@@ -152,6 +163,20 @@ class DatabaseHelper {
             wordsRead INTEGER NOT NULL,
             pagesRead INTEGER NOT NULL,
             timestamp INTEGER NOT NULL
+          )
+        ''');
+      } catch (_) {}
+    }
+    if (oldVersion < 5) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS completed_chapters (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bookId TEXT NOT NULL,
+            chapterIndex INTEGER NOT NULL,
+            wordsCount INTEGER NOT NULL,
+            completedAt INTEGER NOT NULL,
+            UNIQUE(bookId, chapterIndex) ON CONFLICT IGNORE
           )
         ''');
       } catch (_) {}
@@ -280,6 +305,62 @@ class DatabaseHelper {
     await db.delete('highlights', where: 'id = ?', whereArgs: [id]);
   }
 
+  // Chapter Completion Tracking (guarantees accurate stats with no duplicate word counting)
+  Future<bool> markChapterCompleted({
+    required String bookId,
+    required int chapterIndex,
+    required int wordsCount,
+  }) async {
+    final db = await database;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    try {
+      final id = await db.insert(
+        'completed_chapters',
+        {
+          'bookId': bookId,
+          'chapterIndex': chapterIndex,
+          'wordsCount': wordsCount,
+          'completedAt': now,
+        },
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
+      return id > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<Set<int>> getCompletedChapterIndices(String bookId) async {
+    final db = await database;
+    try {
+      final res = await db.query(
+        'completed_chapters',
+        columns: ['chapterIndex'],
+        where: 'bookId = ?',
+        whereArgs: [bookId],
+      );
+      return res.map((r) => r['chapterIndex'] as int).toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<int> getTotalCompletedChaptersCount(String bookId) async {
+    final db = await database;
+    try {
+      final res = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM completed_chapters WHERE bookId = ?',
+        [bookId],
+      );
+      if (res.isNotEmpty && res.first.values.isNotEmpty) {
+        return (res.first.values.first as num?)?.toInt() ?? 0;
+      }
+      return 0;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   // Reading Sessions & Detailed Stats
   Future<void> recordReadingSession({
     required String bookId,
@@ -303,6 +384,12 @@ class DatabaseHelper {
       timestamp: now.millisecondsSinceEpoch,
     );
     await db.insert('reading_sessions', session.toMap());
+  }
+
+  Future<void> clearReadingStats() async {
+    final db = await database;
+    await db.delete('reading_sessions');
+    await db.delete('completed_chapters');
   }
 
   Future<ReadingPeriodStats> getReadingStats({String period = 'week'}) async {

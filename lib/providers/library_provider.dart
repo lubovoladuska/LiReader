@@ -213,7 +213,7 @@ class LibraryProvider extends ChangeNotifier {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['epub', 'pdf', 'fb2', 'txt', 'md'],
+        allowedExtensions: ['epub', 'pdf', 'fb2', 'zip', 'txt', 'md'],
         allowMultiple: false,
       );
 
