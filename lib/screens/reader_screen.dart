@@ -17,6 +17,7 @@ import '../widgets/reader/chapter_picker_dialog.dart';
 import '../widgets/reader/reader_theme_settings_sheet.dart';
 import '../widgets/reader/sleep_timer_dialog.dart';
 import '../widgets/reader/tts_mini_player.dart';
+import '../widgets/reader/comic_viewer.dart';
 import 'wallpaper_customization_screen.dart';
 
 class ReaderScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  final GlobalKey<ComicViewerState> _comicViewerKey = GlobalKey<ComicViewerState>();
   late PageController _pageController;
   Timer? _clockTimer;
   String _currentTimeString = '';
@@ -190,7 +192,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         onPressed: () async {
                           final result = await FilePicker.platform.pickFiles(
                             type: FileType.custom,
-                            allowedExtensions: ['epub', 'fb2', 'txt', 'md', 'pdf'],
+                            allowedExtensions: ['epub', 'fb2', 'txt', 'md', 'pdf', 'cbz', 'cbr'],
                             allowMultiple: false,
                           );
                           if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
@@ -217,14 +219,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
             );
           }
 
-          final currentChapterTitle = chapters.isNotEmpty && reader.currentChapterIndex < chapters.length
-              ? chapters[reader.currentChapterIndex].title
-              : 'Чтение';
+          final isComic = widget.book.format == BookFormat.cbz;
+          final currentChapterTitle = isComic
+              ? (chapters.isNotEmpty && reader.currentChapterIndex < chapters.length
+                  ? 'Стр. ${reader.currentChapterIndex + 1} из ${chapters.length}'
+                  : 'Комикс')
+              : (chapters.isNotEmpty && reader.currentChapterIndex < chapters.length
+                  ? chapters[reader.currentChapterIndex].title
+                  : 'Чтение');
 
           _updateSystemUI(reader.isMenuVisible);
           final isDesktop = MediaQuery.of(context).size.width > 700;
 
-          if (_pageController.hasClients &&
+          if (!isComic &&
+              _pageController.hasClients &&
               _pageController.positions.isNotEmpty &&
               _pageController.page?.round() != reader.currentChapterIndex) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -238,16 +246,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
           return Scaffold(
             key: _scaffoldKey,
-            endDrawer: BookNotesSidebar(
-              onSelectChapter: (idx) {
-                if (widget.book.format != BookFormat.pdf) {
-                  _pageController.jumpToPage(idx);
-                }
-              },
-            ),
+            endDrawer: isComic
+                ? null
+                : BookNotesSidebar(
+                    onSelectChapter: (idx) {
+                      if (widget.book.format != BookFormat.pdf) {
+                        _pageController.jumpToPage(idx);
+                      }
+                    },
+                  ),
             body: Stack(
               children: [
-                // Base content: PDF or Chapters PageView (stays fullscreen without layout jump)
+                // Base content: PDF, Comic (CBZ), or Chapters PageView (stays fullscreen without layout jump)
                 if (widget.book.format == BookFormat.pdf)
                   Positioned.fill(
                     child: GestureDetector(
@@ -261,6 +271,17 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           },
                         ),
                       ),
+                    ),
+                  )
+                else if (isComic)
+                  Positioned.fill(
+                    child: ComicViewer(
+                      key: _comicViewerKey,
+                      book: widget.book,
+                      pages: chapters,
+                      initialPage: reader.currentChapterIndex,
+                      onToggleMenu: () => reader.toggleMenu(),
+                      isMenuVisible: reader.isMenuVisible,
                     ),
                   )
                 else
@@ -329,7 +350,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                   Expanded(
                                     child: InkWell(
                                       onTap: () async {
-                                        if (widget.book.format != BookFormat.pdf) {
+                                        if (isComic) {
+                                          _comicViewerKey.currentState?.showThumbnailsSheet(context);
+                                        } else if (widget.book.format != BookFormat.pdf) {
                                           final selected = await showDialog<int>(
                                             context: context,
                                             builder: (ctx) => ChangeNotifierProvider.value(
@@ -373,43 +396,57 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                       ),
                                     ),
                                   ),
-                                  // Quotes / Highlights button with badge
-                                  Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.format_quote_rounded),
-                                        tooltip: 'Цитаты и заметки (${reader.highlights.length})',
-                                        color: reader.highlights.isNotEmpty ? AppTheme.primaryPinkDark : null,
-                                        onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
-                                      ),
-                                      if (reader.highlights.isNotEmpty)
-                                        Positioned(
-                                          top: 8,
-                                          right: 8,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(3),
-                                            decoration: const BoxDecoration(
-                                              color: AppTheme.primaryPinkDark,
-                                              shape: BoxShape.circle,
-                                            ),
-                                            constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                                            child: Text(
-                                              '${reader.highlights.length}',
-                                              style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                  // Theme & Typography Settings
-                                  if (widget.book.format != BookFormat.pdf)
+                                  // Comic specific buttons OR standard book buttons
+                                  if (isComic) ...[
+                                    IconButton(
+                                      icon: const Icon(Icons.grid_view_rounded),
+                                      tooltip: 'Сетка страниц',
+                                      onPressed: () => _comicViewerKey.currentState?.showThumbnailsSheet(context),
+                                    ),
                                     IconButton(
                                       icon: const Icon(Icons.tune_rounded),
-                                      tooltip: 'Оформление текста и темы',
-                                      onPressed: () => _showThemeSettings(context, reader),
+                                      tooltip: 'Режим чтения и фон',
+                                      onPressed: () => _comicViewerKey.currentState?.showComicSettingsDialog(context),
                                     ),
+                                  ] else ...[
+                                    // Quotes / Highlights button with badge
+                                    Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.format_quote_rounded),
+                                          tooltip: 'Цитаты и заметки (${reader.highlights.length})',
+                                          color: reader.highlights.isNotEmpty ? AppTheme.primaryPinkDark : null,
+                                          onPressed: () => _scaffoldKey.currentState?.openEndDrawer(),
+                                        ),
+                                        if (reader.highlights.isNotEmpty)
+                                          Positioned(
+                                            top: 8,
+                                            right: 8,
+                                            child: Container(
+                                              padding: const EdgeInsets.all(3),
+                                              decoration: const BoxDecoration(
+                                                color: AppTheme.primaryPinkDark,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                                              child: Text(
+                                                '${reader.highlights.length}',
+                                                style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                    // Theme & Typography Settings
+                                    if (widget.book.format != BookFormat.pdf)
+                                      IconButton(
+                                        icon: const Icon(Icons.tune_rounded),
+                                        tooltip: 'Оформление текста и темы',
+                                        onPressed: () => _showThemeSettings(context, reader),
+                                      ),
+                                  ],
                                   // More options menu (Wallpaper, Search, Sleep timer)
                                   PopupMenuButton<String>(
                                     icon: const Icon(Icons.more_vert_rounded),
@@ -440,7 +477,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                       }
                                     },
                                     itemBuilder: (ctx) => [
-                                      if (widget.book.format != BookFormat.pdf)
+                                      if (widget.book.format != BookFormat.pdf && !isComic)
                                         const PopupMenuItem(
                                           value: 'tts',
                                           child: Row(
@@ -451,7 +488,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                             ],
                                           ),
                                         ),
-                                      if (widget.book.format != BookFormat.pdf)
+                                      if (widget.book.format != BookFormat.pdf && !isComic)
                                         const PopupMenuItem(
                                           value: 'toc',
                                           child: Row(
@@ -462,7 +499,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                             ],
                                           ),
                                         ),
-                                      if (widget.book.format != BookFormat.pdf)
+                                      if (widget.book.format != BookFormat.pdf && !isComic)
                                         const PopupMenuItem(
                                           value: 'search',
                                           child: Row(
@@ -473,7 +510,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                             ],
                                           ),
                                         ),
-                                      if (widget.book.format != BookFormat.pdf)
+                                      if (widget.book.format != BookFormat.pdf && !isComic)
                                         const PopupMenuItem(
                                           value: 'wallpaper',
                                           child: Row(
@@ -676,31 +713,41 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                         children: [
                                           Row(
                                             children: [
-                                              // Previous chapter button
+                                              // Previous chapter/page button
                                               IconButton(
                                                 icon: const Icon(Icons.skip_previous_rounded, size: 26),
-                                                tooltip: 'Предыдущая глава',
+                                                tooltip: isComic ? 'Предыдущая страница' : 'Предыдущая глава',
                                                 color: reader.currentChapterIndex > 0
                                                     ? AppTheme.primaryPinkDark
                                                     : Colors.grey.withValues(alpha: 0.35),
                                                 onPressed: reader.currentChapterIndex > 0
-                                                    ? () => _pageController.jumpToPage(reader.currentChapterIndex - 1)
+                                                    ? () {
+                                                        if (isComic) {
+                                                          _comicViewerKey.currentState?.previousPage();
+                                                        } else {
+                                                          _pageController.jumpToPage(reader.currentChapterIndex - 1);
+                                                        }
+                                                      }
                                                     : null,
                                               ),
-                                              // Central clickable Chapter indicator
+                                              // Central clickable Chapter/Page indicator
                                               Expanded(
                                                 child: InkWell(
                                                   borderRadius: BorderRadius.circular(10),
                                                   onTap: () async {
-                                                    final selected = await showDialog<int>(
-                                                      context: context,
-                                                      builder: (ctx) => ChangeNotifierProvider.value(
-                                                        value: reader,
-                                                        child: const ChapterPickerDialog(),
-                                                      ),
-                                                    );
-                                                    if (selected != null) {
-                                                      _pageController.jumpToPage(selected);
+                                                    if (isComic) {
+                                                      _comicViewerKey.currentState?.showThumbnailsSheet(context);
+                                                    } else {
+                                                      final selected = await showDialog<int>(
+                                                        context: context,
+                                                        builder: (ctx) => ChangeNotifierProvider.value(
+                                                          value: reader,
+                                                          child: const ChapterPickerDialog(),
+                                                        ),
+                                                      );
+                                                      if (selected != null) {
+                                                        _pageController.jumpToPage(selected);
+                                                      }
                                                     }
                                                   },
                                                   child: Padding(
@@ -713,7 +760,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                                           mainAxisSize: MainAxisSize.min,
                                                           children: [
                                                             Text(
-                                                              'Глава ${reader.currentChapterIndex + 1} из ${chapters.length}',
+                                                              isComic
+                                                                  ? 'Страница ${reader.currentChapterIndex + 1} из ${chapters.length}'
+                                                                  : 'Глава ${reader.currentChapterIndex + 1} из ${chapters.length}',
                                                               style: const TextStyle(
                                                                 fontSize: 13,
                                                                 fontWeight: FontWeight.bold,
@@ -721,12 +770,18 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                                               ),
                                                             ),
                                                             const SizedBox(width: 4),
-                                                            const Icon(Icons.format_list_bulleted_rounded, size: 14, color: AppTheme.primaryPinkDark),
+                                                            Icon(
+                                                              isComic ? Icons.grid_view_rounded : Icons.format_list_bulleted_rounded,
+                                                              size: 14,
+                                                              color: AppTheme.primaryPinkDark,
+                                                            ),
                                                           ],
                                                         ),
                                                         const SizedBox(height: 2),
                                                         Text(
-                                                          currentChapterTitle,
+                                                          isComic
+                                                              ? (_comicViewerKey.currentState?.readingMode.label ?? 'Комикс')
+                                                              : currentChapterTitle,
                                                           maxLines: 1,
                                                           overflow: TextOverflow.ellipsis,
                                                           textAlign: TextAlign.center,
@@ -740,15 +795,21 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                                   ),
                                                 ),
                                               ),
-                                              // Next chapter button
+                                              // Next chapter/page button
                                               IconButton(
                                                 icon: const Icon(Icons.skip_next_rounded, size: 26),
-                                                tooltip: 'Следующая глава',
+                                                tooltip: isComic ? 'Следующая страница' : 'Следующая глава',
                                                 color: reader.currentChapterIndex < chapters.length - 1
                                                     ? AppTheme.primaryPinkDark
                                                     : Colors.grey.withValues(alpha: 0.35),
                                                 onPressed: reader.currentChapterIndex < chapters.length - 1
-                                                    ? () => _pageController.jumpToPage(reader.currentChapterIndex + 1)
+                                                    ? () {
+                                                        if (isComic) {
+                                                          _comicViewerKey.currentState?.nextPage();
+                                                        } else {
+                                                          _pageController.jumpToPage(reader.currentChapterIndex + 1);
+                                                        }
+                                                      }
                                                     : null,
                                               ),
                                             ],
@@ -768,9 +829,15 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                               min: 0.0,
                                               max: (chapters.length - 1).toDouble(),
                                               divisions: chapters.length > 1 ? chapters.length - 1 : 1,
-                                              label: 'Глава ${reader.currentChapterIndex + 1}',
+                                              label: isComic
+                                                  ? 'Стр. ${reader.currentChapterIndex + 1}'
+                                                  : 'Глава ${reader.currentChapterIndex + 1}',
                                               onChanged: (val) {
-                                                _pageController.jumpToPage(val.toInt());
+                                                if (isComic) {
+                                                  _comicViewerKey.currentState?.jumpToPage(val.toInt());
+                                                } else {
+                                                  _pageController.jumpToPage(val.toInt());
+                                                }
                                               },
                                             ),
                                           ),
@@ -785,7 +852,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
                         ),
 
                       // Floating TTS Mini Player
-                      if (widget.book.format != BookFormat.pdf)
+                      if (widget.book.format != BookFormat.pdf && !isComic)
                         AnimatedPositioned(
                           duration: const Duration(milliseconds: 250),
                           curve: Curves.easeInOutCubic,
@@ -806,7 +873,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
                           left: 0,
                           right: 0,
                           bottom: 0,
-
                           child: IgnorePointer(
                             child: SafeArea(
                               child: Container(
@@ -816,9 +882,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                   children: [
                                     // Current chapter info & chapter progress %
                                     Text(
-                                      chapters.isNotEmpty
-                                          ? 'Гл. ${reader.currentChapterIndex + 1} из ${chapters.length} • ${(reader.chapterScrollProgress * 100).toInt()}%'
-                                          : '${(reader.chapterScrollProgress * 100).toInt()}%',
+                                      isComic
+                                          ? 'Стр. ${reader.currentChapterIndex + 1} из ${chapters.length} • ${((reader.currentChapterIndex + 1) / (chapters.isEmpty ? 1 : chapters.length) * 100).toInt()}%'
+                                          : (chapters.isNotEmpty
+                                              ? 'Гл. ${reader.currentChapterIndex + 1} из ${chapters.length} • ${(reader.chapterScrollProgress * 100).toInt()}%'
+                                              : '${(reader.chapterScrollProgress * 100).toInt()}%'),
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,

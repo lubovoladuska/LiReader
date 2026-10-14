@@ -32,10 +32,48 @@ class ChangelogService {
   /// History of all releases. Add new versions to the top of this list.
   static const List<ReleaseNote> releases = [
     ReleaseNote(
+      version: '1.2.0',
+      date: 'Октябрь 2026',
+      headline: 'Поддержка комиксов и манги (CBZ/ZIP), режимы Манги и Вебтуна, плавный зум',
+      isLatest: true,
+      items: [
+        ChangelogItem(
+          icon: Icons.photo_library_rounded,
+          title: 'Полноценный графический ридер (CBZ / ZIP)',
+          description:
+              'Читайте любимые комиксы, мангу и графические новеллы прямо в LiReader! Автоматическое распознавание архивов CBZ и ZIP с картинками, умная естественная сортировка страниц и автогенерация обложек.',
+        ),
+        ChangelogItem(
+          icon: Icons.auto_stories_rounded,
+          title: 'Режимы чтения: Комиксы, Манга (R-L) и Вебтун',
+          description:
+              'Переключайтесь между классическим листанием слева-направо (L-R), японским стилем чтения справа-налево (R-L Manga) и непрерывной вертикальной лентой (Webtoon).',
+        ),
+        ChangelogItem(
+          icon: Icons.zoom_in_rounded,
+          title: 'Свободный зум и двойной тап',
+          description:
+              'Приближайте мелкие реплики и детали рисунка жестом pinch-to-zoom (до 4.5x) или мгновенно увеличивайте область двойным тапом с плавным сбросом.',
+        ),
+        ChangelogItem(
+          icon: Icons.grid_view_rounded,
+          title: 'Сетка страниц и быстрый переход',
+          description:
+              'Просматривайте миниатюры всех страниц комикса в наглядной сетке и прыгайте на любую страницу в один клик.',
+        ),
+        ChangelogItem(
+          icon: Icons.palette_rounded,
+          title: 'Выбор фона: OLED Black, Графит, Сепия',
+          description:
+              'Адаптируйте фон комикса под освещение — от абсолютного глубокого черного для OLED-экранов до мягкой сепии.',
+        ),
+      ],
+    ),
+    ReleaseNote(
       version: '1.1.0',
       date: 'Октябрь 2026',
       headline: 'Озвучка текста голосом (TTS) и дизайнерские карточки цитат',
-      isLatest: true,
+      isLatest: false,
       items: [
         ChangelogItem(
           icon: Icons.headphones_rounded,

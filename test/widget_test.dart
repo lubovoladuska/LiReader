@@ -22,5 +22,6 @@ void main() {
       ),
     );
     expect(find.text('LiReader'), findsWidgets);
+    await tester.pump(const Duration(seconds: 3));
   });
 }

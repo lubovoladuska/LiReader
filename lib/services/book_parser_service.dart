@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:xml/xml.dart';
 import '../models/book_item.dart';
+import 'comic_parser_service.dart';
 
 class BookChapter {
   final int index;
@@ -145,12 +146,20 @@ class BookParserService {
       author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
       totalUnits = parsed.chapters.length;
       coverPath = await _extractFb2Cover(permanentPath);
+    } else if (ext == '.cbz' || ext == '.cbr') {
+      format = BookFormat.cbz;
+      final meta = await ComicParserService.inspectComic(permanentPath);
+      title = meta.title.isNotEmpty ? meta.title : fileName;
+      author = meta.author.isNotEmpty ? meta.author : 'Комикс / Манга';
+      totalUnits = meta.totalPages;
+      coverPath = meta.coverPath;
     } else if (ext == '.zip') {
       try {
         final bytes = await File(permanentPath).readAsBytes();
-        final archive = ZipDecoder().decodeBytes(bytes);
+        final archive = ZipDecoder().decodeBytes(bytes, verify: false);
         final hasFb2 = archive.files.any((f) => f.name.toLowerCase().endsWith('.fb2'));
         final hasEpub = archive.files.any((f) => f.name.toLowerCase().endsWith('.opf') || f.name.toLowerCase().endsWith('.ncx'));
+        final hasImages = archive.files.any((f) => ComicParserService.isImageFile(f.name));
         if (hasFb2) {
           format = BookFormat.fb2;
           final parsed = await parseFb2(permanentPath);
@@ -165,6 +174,13 @@ class BookParserService {
           author = parsed.author.isNotEmpty ? parsed.author : 'Автор не указан';
           totalUnits = parsed.chapters.length;
           coverPath = await _extractEpubCover(permanentPath);
+        } else if (hasImages) {
+          format = BookFormat.cbz;
+          final meta = await ComicParserService.inspectComic(permanentPath);
+          title = meta.title.isNotEmpty ? meta.title : fileName;
+          author = meta.author.isNotEmpty ? meta.author : 'Комикс / Манга';
+          totalUnits = meta.totalPages;
+          coverPath = meta.coverPath;
         }
       } catch (e) {
         debugPrint('Error inspecting ZIP container: $e');
@@ -444,6 +460,9 @@ class BookParserService {
       return await _extractEpubCover(path);
     } else if (book.format == BookFormat.fb2) {
       return await _extractFb2Cover(path);
+    } else if (book.format == BookFormat.cbz) {
+      final meta = await ComicParserService.inspectComic(path);
+      return meta.coverPath;
     }
     return null;
   }
@@ -460,6 +479,8 @@ class BookParserService {
         return await parseEpub(path);
       case BookFormat.fb2:
         return await parseFb2(path);
+      case BookFormat.cbz:
+        return await ComicParserService.parseComic(book);
       case BookFormat.txt:
       case BookFormat.markdown:
         return await parseTxt(path);

@@ -4,6 +4,7 @@ enum BookFormat {
   fb2,
   txt,
   markdown,
+  cbz,
   unknown,
 }
 

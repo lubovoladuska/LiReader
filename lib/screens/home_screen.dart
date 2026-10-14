@@ -61,6 +61,8 @@ class _HomeScreenState extends State<HomeScreen> {
       case BookFormat.txt:
       case BookFormat.markdown:
         return const Color(0xFFF5A623);
+      case BookFormat.cbz:
+        return const Color(0xFFAB47BC);
       default:
         return Colors.grey;
     }
@@ -497,6 +499,17 @@ class _HomeScreenState extends State<HomeScreen> {
                           library.selectedFormat == BookFormat.txt ? null : BookFormat.txt,
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      _buildFormatChip(
+                        context: context,
+                        label: 'CBZ / Манга',
+                        icon: Icons.photo_library_rounded,
+                        isSelected: library.selectedFormat == BookFormat.cbz,
+                        count: library.allBooks.where((b) => b.format == BookFormat.cbz).length,
+                        onSelected: () => library.setFormatFilter(
+                          library.selectedFormat == BookFormat.cbz ? null : BookFormat.cbz,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -690,7 +703,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         child: Icon(
                           book.format == BookFormat.pdf
                               ? Icons.picture_as_pdf_rounded
-                              : Icons.menu_book_rounded,
+                              : (book.format == BookFormat.cbz
+                                  ? Icons.photo_library_rounded
+                                  : Icons.menu_book_rounded),
                           size: 42,
                           color: AppTheme.primaryPinkDark.withValues(alpha: 0.85),
                         ),
@@ -887,7 +902,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Icon(
                               book.format == BookFormat.pdf
                                   ? Icons.picture_as_pdf_rounded
-                                  : Icons.menu_book_rounded,
+                                  : (book.format == BookFormat.cbz
+                                      ? Icons.photo_library_rounded
+                                      : Icons.menu_book_rounded),
                               size: 26,
                               color: AppTheme.primaryPinkDark.withValues(alpha: 0.85),
                             ),
@@ -1032,7 +1049,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(ctx);
                 final result = await FilePicker.platform.pickFiles(
                   type: FileType.custom,
-                  allowedExtensions: ['epub', 'fb2', 'txt', 'md', 'pdf'],
+                  allowedExtensions: ['epub', 'fb2', 'txt', 'md', 'pdf', 'cbz', 'cbr'],
                   allowMultiple: false,
                 );
                 if (result != null && result.files.isNotEmpty && result.files.single.path != null) {

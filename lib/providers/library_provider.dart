@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import '../models/book_item.dart';
 import '../services/book_parser_service.dart';
+import '../services/comic_parser_service.dart';
 import '../services/database_helper.dart';
 
 enum LibraryFilter {
@@ -142,7 +143,7 @@ class LibraryProvider extends ChangeNotifier {
       }
 
       final coverExists = book.coverPath != null && File(book.coverPath!).existsSync();
-      if (!coverExists && (book.format == BookFormat.epub || book.format == BookFormat.fb2)) {
+      if (!coverExists && (book.format == BookFormat.epub || book.format == BookFormat.fb2 || book.format == BookFormat.cbz)) {
         try {
           final newCoverPath = await BookParserService.extractCoverForBook(book);
           if (newCoverPath != null && File(newCoverPath).existsSync()) {
@@ -213,7 +214,7 @@ class LibraryProvider extends ChangeNotifier {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['epub', 'pdf', 'fb2', 'zip', 'txt', 'md'],
+        allowedExtensions: ['epub', 'pdf', 'fb2', 'zip', 'txt', 'md', 'cbz', 'cbr'],
         allowMultiple: false,
       );
 
@@ -312,6 +313,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> removeBook(String id) async {
+    await ComicParserService.deleteComicCache(id);
     await _dbHelper.deleteBook(id);
     _books.removeWhere((b) => b.id == id);
     notifyListeners();
