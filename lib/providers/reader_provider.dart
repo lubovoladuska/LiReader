@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../models/book_item.dart';
 import '../models/reader_theme_settings.dart';
 import '../models/search_result.dart';
+import '../models/vocabulary_item.dart';
 import '../services/book_parser_service.dart';
 import '../services/database_helper.dart';
 import '../services/image_utils.dart';
@@ -23,6 +24,7 @@ class ReaderProvider extends ChangeNotifier {
   double _chapterScrollProgress = 0.0;
   bool _isMenuVisible = true;
   List<BookHighlight> _highlights = [];
+  List<VocabularyItem> _vocabulary = [];
   ReaderThemeSettings _themeSettings = const ReaderThemeSettings();
 
   // --- Reading Session Tracking & Accuracy ---
@@ -72,6 +74,7 @@ class ReaderProvider extends ChangeNotifier {
   bool get isMenuVisible => _isMenuVisible;
 
   List<BookHighlight> get highlights => _highlights;
+  List<VocabularyItem> get vocabulary => _vocabulary;
   ReaderThemeSettings get themeSettings => _themeSettings;
 
   // Backwards compatibility shortcuts
@@ -106,6 +109,7 @@ class ReaderProvider extends ChangeNotifier {
     try {
       _parsedData = await BookParserService.parseBook(book);
       _highlights = await _dbHelper.getHighlightsForBook(book.id);
+      _vocabulary = await _dbHelper.getVocabularyItems(bookId: book.id);
       _completedChapterIndices = await _dbHelper.getCompletedChapterIndices(book.id);
 
       // Load persisted global theme settings
@@ -545,6 +549,48 @@ class ReaderProvider extends ChangeNotifier {
     await _dbHelper.deleteHighlight(id);
     _highlights.removeWhere((h) => h.id == id);
     notifyListeners();
+  }
+
+  // --- Vocabulary / Dictionary ---
+
+  Future<void> saveVocabularyWord({
+    required String word,
+    required String translation,
+    String? phonetic,
+    String? definition,
+    String sourceLang = 'auto',
+    String targetLang = 'ru',
+    String? contextSnippet,
+  }) async {
+    final item = VocabularyItem(
+      id: _uuid.v4(),
+      word: word.trim(),
+      translation: translation.trim(),
+      phonetic: phonetic,
+      definition: definition,
+      sourceLang: sourceLang,
+      targetLang: targetLang,
+      contextSnippet: contextSnippet,
+      bookId: book.id,
+      bookTitle: book.title,
+      addedAt: DateTime.now(),
+    );
+
+    await _dbHelper.insertVocabularyItem(item);
+    _vocabulary.removeWhere((v) => v.word.toLowerCase() == word.trim().toLowerCase());
+    _vocabulary.insert(0, item);
+    notifyListeners();
+  }
+
+  Future<void> removeVocabularyWord(String id) async {
+    await _dbHelper.deleteVocabularyItem(id);
+    _vocabulary.removeWhere((v) => v.id == id);
+    notifyListeners();
+  }
+
+  bool isWordInVocabulary(String word) {
+    final clean = word.trim().toLowerCase();
+    return _vocabulary.any((v) => v.word.toLowerCase() == clean);
   }
 
   // --- TTS (Text-to-Speech) Audio Reading ---

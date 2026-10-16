@@ -204,4 +204,23 @@ class TtsService {
     }
     await setSpeechRate(rates[nextIdx]);
   }
+
+  /// Speaks a standalone word or phrase with optional language (e.g. for translation sheet)
+  Future<void> speakWord(String text, {String? lang}) async {
+    await init();
+    try {
+      if (lang != null && lang.isNotEmpty) {
+        if (lang.toLowerCase().startsWith('ru')) {
+          await _tts.setLanguage('ru-RU');
+        } else if (lang.toLowerCase().startsWith('en')) {
+          await _tts.setLanguage('en-US');
+        } else {
+          await _tts.setLanguage(lang);
+        }
+      }
+      await _tts.speak(text);
+    } catch (e) {
+      debugPrint('Error speaking word: $e');
+    }
+  }
 }

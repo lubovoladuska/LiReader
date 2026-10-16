@@ -11,6 +11,7 @@ import '../../services/book_parser_service.dart';
 import '../../theme/app_theme.dart';
 import 'highlight_context_menu.dart';
 import 'quote_card_dialog.dart';
+import 'translation_sheet.dart';
 import '../../services/tts_service.dart';
 
 class ChapterContentView extends StatefulWidget {
@@ -254,9 +255,23 @@ class _ChapterContentViewState extends State<ChapterContentView> {
                 Text('Заметка: ${highlight.note}', style: const TextStyle(fontStyle: FontStyle.italic)),
               ],
               const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.g_translate_rounded, size: 16, color: AppTheme.primaryPinkDark),
+                    label: const Text('Перевод'),
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      TranslationSheet.show(
+                        context,
+                        text: highlight.selectedText.trim(),
+                        reader: reader,
+                      );
+                    },
+                  ),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.auto_awesome_rounded, size: 16, color: AppTheme.primaryPinkDark),
                     label: const Text('Цитата ✨'),
@@ -611,6 +626,19 @@ class _ChapterContentViewState extends State<ChapterContentView> {
                                 bookTitle: reader.book.title,
                                 author: reader.book.author,
                                 themeSettings: reader.themeSettings,
+                              );
+                            },
+                            onTranslate: () {
+                              editableTextState.hideToolbar();
+                              final startContext = (selection.start - 80).clamp(0, sanitizedContent.length);
+                              final endContext = (selection.end + 80).clamp(0, sanitizedContent.length);
+                              final snippet = sanitizedContent.substring(startContext, endContext).trim();
+
+                              TranslationSheet.show(
+                                context,
+                                text: selectedText.trim(),
+                                contextSnippet: snippet.isNotEmpty ? '...$snippet...' : null,
+                                reader: reader,
                               );
                             },
                           ),

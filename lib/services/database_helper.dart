@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/book_item.dart';
 import '../models/reading_session.dart';
+import '../models/vocabulary_item.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -43,7 +44,7 @@ class DatabaseHelper {
     return await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 5,
+        version: 6,
         onCreate: _createDB,
         onUpgrade: _upgradeDB,
       ),
@@ -122,6 +123,22 @@ class DatabaseHelper {
         UNIQUE(bookId, chapterIndex) ON CONFLICT IGNORE
       )
     ''');
+
+    await db.execute('''
+      CREATE TABLE vocabulary (
+        id TEXT PRIMARY KEY,
+        word TEXT NOT NULL,
+        translation TEXT NOT NULL,
+        phonetic TEXT,
+        definition TEXT,
+        sourceLang TEXT NOT NULL,
+        targetLang TEXT NOT NULL,
+        contextSnippet TEXT,
+        bookId TEXT,
+        bookTitle TEXT,
+        addedAt TEXT NOT NULL
+      )
+    ''');
   }
 
   Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
@@ -177,6 +194,25 @@ class DatabaseHelper {
             wordsCount INTEGER NOT NULL,
             completedAt INTEGER NOT NULL,
             UNIQUE(bookId, chapterIndex) ON CONFLICT IGNORE
+          )
+        ''');
+      } catch (_) {}
+    }
+    if (oldVersion < 6) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS vocabulary (
+            id TEXT PRIMARY KEY,
+            word TEXT NOT NULL,
+            translation TEXT NOT NULL,
+            phonetic TEXT,
+            definition TEXT,
+            sourceLang TEXT NOT NULL,
+            targetLang TEXT NOT NULL,
+            contextSnippet TEXT,
+            bookId TEXT,
+            bookTitle TEXT,
+            addedAt TEXT NOT NULL
           )
         ''');
       } catch (_) {}
@@ -303,6 +339,69 @@ class DatabaseHelper {
   Future<void> deleteHighlight(String id) async {
     final db = await database;
     await db.delete('highlights', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // Personal Vocabulary / Saved Words
+  Future<void> insertVocabularyItem(VocabularyItem item) async {
+    final db = await database;
+    await db.insert('vocabulary', item.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deleteVocabularyItem(String id) async {
+    final db = await database;
+    await db.delete('vocabulary', where: 'id = ?', whereArgs: [id]);
+  }
+
+  Future<bool> isWordSaved(String word, {String? bookId}) async {
+    final db = await database;
+    final cleanWord = word.trim().toLowerCase();
+    List<Map<String, dynamic>> res;
+    if (bookId != null) {
+      res = await db.query(
+        'vocabulary',
+        where: 'LOWER(word) = ? AND bookId = ?',
+        whereArgs: [cleanWord, bookId],
+        limit: 1,
+      );
+    } else {
+      res = await db.query(
+        'vocabulary',
+        where: 'LOWER(word) = ?',
+        whereArgs: [cleanWord],
+        limit: 1,
+      );
+    }
+    return res.isNotEmpty;
+  }
+
+  Future<List<VocabularyItem>> getVocabularyItems({String? bookId}) async {
+    final db = await database;
+    List<Map<String, dynamic>> maps;
+    if (bookId != null) {
+      maps = await db.query(
+        'vocabulary',
+        where: 'bookId = ?',
+        whereArgs: [bookId],
+        orderBy: 'addedAt DESC',
+      );
+    } else {
+      maps = await db.query(
+        'vocabulary',
+        orderBy: 'addedAt DESC',
+      );
+    }
+    return maps.map((e) => VocabularyItem.fromMap(e)).toList();
+  }
+
+  Future<int> getVocabularyCount({String? bookId}) async {
+    final db = await database;
+    final res = bookId != null
+        ? await db.rawQuery('SELECT COUNT(*) as count FROM vocabulary WHERE bookId = ?', [bookId])
+        : await db.rawQuery('SELECT COUNT(*) as count FROM vocabulary');
+    if (res.isNotEmpty && res.first.values.isNotEmpty) {
+      return (res.first.values.first as int?) ?? 0;
+    }
+    return 0;
   }
 
   // Chapter Completion Tracking (guarantees accurate stats with no duplicate word counting)

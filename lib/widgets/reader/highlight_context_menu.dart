@@ -7,6 +7,7 @@ class HighlightToolbar extends StatelessWidget {
   final Function(int colorValue) onColorSelected;
   final VoidCallback? onClearHighlight;
   final VoidCallback? onShareQuote;
+  final VoidCallback? onTranslate;
 
   const HighlightToolbar({
     super.key,
@@ -15,6 +16,7 @@ class HighlightToolbar extends StatelessWidget {
     required this.onColorSelected,
     this.onClearHighlight,
     this.onShareQuote,
+    this.onTranslate,
   });
 
   @override
@@ -105,6 +107,16 @@ class HighlightToolbar extends StatelessWidget {
                 color: isDark ? AppTheme.darkTextPrimary : AppTheme.lightTextPrimary,
                 onPressed: onCopy,
               ),
+
+              if (onTranslate != null) ...[
+                IconButton(
+                  icon: const Icon(Icons.g_translate_rounded, size: 17, color: AppTheme.primaryPinkDark),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Перевести / Словарь',
+                  onPressed: onTranslate,
+                ),
+              ],
 
               if (onShareQuote != null) ...[
                 IconButton(
