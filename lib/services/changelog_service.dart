@@ -32,10 +32,42 @@ class ChangelogService {
   /// History of all releases. Add new versions to the top of this list.
   static const List<ReleaseNote> releases = [
     ReleaseNote(
+      version: '1.2.1',
+      date: 'Октябрь 2026',
+      headline: 'Всплывающий переводчик, толковый словарь (Wiktionary/Википедия) и личный словарь',
+      isLatest: true,
+      items: [
+        ChangelogItem(
+          icon: Icons.g_translate_rounded,
+          title: 'Быстрый перевод по выделению текста',
+          description:
+              'Выделяйте незнакомые слова или фразы во время чтения и мгновенно переводите их на русский или любой другой язык. Доступен быстрый реверс пары языков [ EN ⇄ RU ] и подборка синонимов.',
+        ),
+        ChangelogItem(
+          icon: Icons.menu_book_rounded,
+          title: 'Толковый словарь (Wiktionary и Википедия)',
+          description:
+              'Для отдельных слов автоматически подтягиваются части речи и точные словарные определения из Wiktionary (для английских слов) и энциклопедические статьи Википедии (для русскоязычных терминов).',
+        ),
+        ChangelogItem(
+          icon: Icons.volume_up_rounded,
+          title: 'Озвучка произношения (TTS)',
+          description:
+              'Слушайте правильное звучание незнакомых иностранных слов в одно касание прямо в окне перевода.',
+        ),
+        ChangelogItem(
+          icon: Icons.bookmark_added_rounded,
+          title: 'Личный словарь книги в боковой шторке',
+          description:
+              'Сохраняйте интересные слова вместе с контекстом из книги в один клик. В боковой шторке читалки появилась вкладка «Словарь» с удобным просмотром, прослушиванием и управлением.',
+        ),
+      ],
+    ),
+    ReleaseNote(
       version: '1.2.0',
       date: 'Октябрь 2026',
       headline: 'Поддержка комиксов и манги (CBZ/ZIP), режимы Манги и Вебтуна, плавный зум',
-      isLatest: true,
+      isLatest: false,
       items: [
         ChangelogItem(
           icon: Icons.photo_library_rounded,
