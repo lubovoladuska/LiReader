@@ -41,9 +41,15 @@ class _WallpaperCustomizationScreenState extends State<WallpaperCustomizationScr
     }
 
     final path = settings.backgroundImagePath!;
-    final ImageProvider imageProvider = settings.isAssetBackground
+    final ImageProvider rawProvider = settings.isAssetBackground
         ? AssetImage(path)
         : FileImage(File(path)) as ImageProvider;
+
+    final ImageProvider imageProvider = ResizeImage(
+      rawProvider,
+      width: 1440,
+      policy: ResizeImagePolicy.fit,
+    );
 
     BoxFit fit = BoxFit.cover;
     ImageRepeat repeat = ImageRepeat.noRepeat;
@@ -292,38 +298,19 @@ class _WallpaperCustomizationScreenState extends State<WallpaperCustomizationScr
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Quick Action Buttons (Rotate 90, Pick Photo, Clear)
+                        // Quick Action Buttons (Pick Photo, Clear)
                         Row(
                           children: [
                             Expanded(
-                              child: OutlinedButton.icon(
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                                  side: BorderSide(
-                                    color: settings.backgroundRotation != 0
-                                        ? AppTheme.primaryPinkDark
-                                        : Colors.grey.withValues(alpha: 0.3),
-                                    width: settings.backgroundRotation != 0 ? 2 : 1,
-                                  ),
+                              child: FilledButton.tonalIcon(
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                 ),
-                                icon: const Icon(Icons.rotate_right_rounded, size: 18),
-                                label: Text(
-                                  'Повернуть (${settings.backgroundRotation}°)',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                ),
-                                onPressed: () => reader.rotateBackground(),
+                                icon: const Icon(Icons.add_photo_alternate_rounded, size: 18),
+                                label: const Text('Выбрать фото', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                onPressed: () => reader.pickCustomBackgroundImage(),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              ),
-                              icon: const Icon(Icons.photo_library_outlined, size: 18),
-                              label: const Text('Фото', style: TextStyle(fontSize: 12)),
-                              onPressed: () => reader.pickCustomBackgroundImage(),
                             ),
                             if (settings.hasBackgroundImage) ...[
                               const SizedBox(width: 8),
@@ -335,6 +322,48 @@ class _WallpaperCustomizationScreenState extends State<WallpaperCustomizationScr
                             ],
                           ],
                         ),
+
+                        if (settings.hasBackgroundImage) ...[
+                          const SizedBox(height: 10),
+                          // Precise Angle Selector & Step Controls
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: isDark ? Colors.white12 : Colors.black12,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.rotate_90_degrees_cw_rounded, size: 18, color: AppTheme.primaryPinkDark),
+                                const SizedBox(width: 8),
+                                const Text('Поворот:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                const Spacer(),
+                                for (final deg in [0, 90, 180, 270])
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: ChoiceChip(
+                                      visualDensity: VisualDensity.compact,
+                                      label: Text('$deg°', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                      selected: settings.backgroundRotation == deg,
+                                      selectedColor: AppTheme.primaryPinkDark.withValues(alpha: 0.25),
+                                      onSelected: (_) => reader.setBackgroundRotation(deg),
+                                    ),
+                                  ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: const Icon(Icons.rotate_right_rounded, size: 18),
+                                  tooltip: 'Повернуть +90°',
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: () => reader.rotateBackground(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
 
                         const SizedBox(height: 12),
 

@@ -138,8 +138,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
       child: Consumer<ReaderProvider>(
         builder: (context, reader, _) {
           if (reader.isLoading) {
-            return const Scaffold(
-              body: Center(
+            return Scaffold(
+              backgroundColor: reader.themeSettings.activeBackground,
+              body: const Center(
                 child: CircularProgressIndicator(),
               ),
             );
@@ -245,6 +246,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
           }
 
           return Scaffold(
+            backgroundColor: reader.themeSettings.activeBackground,
             key: _scaffoldKey,
             endDrawer: isComic
                 ? null

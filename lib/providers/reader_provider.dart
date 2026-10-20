@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import '../models/book_item.dart';
 import '../models/reader_theme_settings.dart';
@@ -10,7 +12,6 @@ import '../models/search_result.dart';
 import '../models/vocabulary_item.dart';
 import '../services/book_parser_service.dart';
 import '../services/database_helper.dart';
-import '../services/image_utils.dart';
 import '../services/tts_service.dart';
 
 class ReaderProvider extends ChangeNotifier {
@@ -107,12 +108,7 @@ class ReaderProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
     try {
-      _parsedData = await BookParserService.parseBook(book);
-      _highlights = await _dbHelper.getHighlightsForBook(book.id);
-      _vocabulary = await _dbHelper.getVocabularyItems(bookId: book.id);
-      _completedChapterIndices = await _dbHelper.getCompletedChapterIndices(book.id);
-
-      // Load persisted global theme settings
+      // 1. Immediately load persisted theme settings first so UI & background are ready
       final settingsJson = await _dbHelper.getSetting('reader_theme_settings');
       if (settingsJson != null) {
         try {
@@ -121,10 +117,21 @@ class ReaderProvider extends ChangeNotifier {
           if (settings.backgroundImagePath != null && !settings.isAssetBackground) {
             final bgFile = File(settings.backgroundImagePath!);
             if (!bgFile.existsSync()) {
-              final resolved = await BookParserService.resolveBookFile(settings.backgroundImagePath!);
-              if (resolved != null) {
-                settings = settings.copyWith(backgroundImagePath: resolved.path);
-              } else {
+              // Quick check if a permanent custom wallpaper exists in LiReader/wallpapers/
+              try {
+                final appDocsDir = await getApplicationDocumentsDirectory();
+                final wallpapersDir = Directory(p.join(appDocsDir.path, 'LiReader', 'wallpapers'));
+                if (wallpapersDir.existsSync()) {
+                  final files = wallpapersDir.listSync().whereType<File>().toList();
+                  if (files.isNotEmpty && files.first.existsSync()) {
+                    settings = settings.copyWith(backgroundImagePath: files.first.path);
+                  } else {
+                    settings = settings.copyWith(backgroundImagePath: null);
+                  }
+                } else {
+                  settings = settings.copyWith(backgroundImagePath: null);
+                }
+              } catch (_) {
                 settings = settings.copyWith(backgroundImagePath: null);
               }
             }
@@ -132,6 +139,19 @@ class ReaderProvider extends ChangeNotifier {
           _themeSettings = settings;
         } catch (_) {}
       }
+
+      // 2. Load book contents and annotations in parallel for maximum speed
+      final results = await Future.wait([
+        BookParserService.parseBook(book),
+        _dbHelper.getHighlightsForBook(book.id),
+        _dbHelper.getVocabularyItems(bookId: book.id),
+        _dbHelper.getCompletedChapterIndices(book.id),
+      ]);
+
+      _parsedData = results[0] as BookParsedData;
+      _highlights = results[1] as List<BookHighlight>;
+      _vocabulary = results[2] as List<VocabularyItem>;
+      _completedChapterIndices = results[3] as Set<int>;
 
       // Clamp chapter index
       if (_currentChapterIndex >= totalChapters) {
@@ -453,15 +473,39 @@ class ReaderProvider extends ChangeNotifier {
         allowMultiple: false,
       );
       if (result != null && result.files.isNotEmpty && result.files.single.path != null) {
-        final path = result.files.single.path!;
-        // Auto-detect EXIF orientation from JPEG header
-        final exifOrientation = await ImageUtils.getExifOrientation(path);
-        final initialRotation = ImageUtils.exifToClockwiseDegrees(exifOrientation);
+        final sourcePath = result.files.single.path!;
+        final sourceFile = File(sourcePath);
+        if (!await sourceFile.exists()) return false;
 
+        // Persist wallpaper into app documents so it survives cache cleanup
+        final appDocsDir = await getApplicationDocumentsDirectory();
+        final wallpapersDir = Directory(p.join(appDocsDir.path, 'LiReader', 'wallpapers'));
+        if (!await wallpapersDir.exists()) {
+          await wallpapersDir.create(recursive: true);
+        }
+
+        // Clean previous wallpaper files
+        try {
+          final existing = wallpapersDir.listSync().whereType<File>();
+          for (final f in existing) {
+            try {
+              await f.delete();
+            } catch (_) {}
+          }
+        } catch (_) {}
+
+        final ext = p.extension(sourcePath).toLowerCase();
+        final safeExt = ext.isNotEmpty ? ext : '.jpg';
+        final permanentPath = p.join(wallpapersDir.path, 'custom_wallpaper$safeExt');
+        final permanentFile = File(permanentPath);
+
+        await sourceFile.copy(permanentFile.path);
+
+        // Start at 0 degrees so the image orientation matches gallery preview
         _themeSettings = _themeSettings.copyWith(
-          backgroundImagePath: path,
+          backgroundImagePath: permanentFile.path,
           isAssetBackground: false,
-          backgroundRotation: initialRotation,
+          backgroundRotation: 0,
         );
         _persistSettings();
         notifyListeners();
@@ -486,6 +530,19 @@ class ReaderProvider extends ChangeNotifier {
   void rotateBackground() {
     final nextRotation = (_themeSettings.backgroundRotation + 90) % 360;
     _themeSettings = _themeSettings.copyWith(backgroundRotation: nextRotation);
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void rotateBackgroundCounterClockwise() {
+    final nextRotation = (_themeSettings.backgroundRotation - 90 + 360) % 360;
+    _themeSettings = _themeSettings.copyWith(backgroundRotation: nextRotation);
+    _persistSettings();
+    notifyListeners();
+  }
+
+  void resetBackgroundRotation() {
+    _themeSettings = _themeSettings.copyWith(backgroundRotation: 0);
     _persistSettings();
     notifyListeners();
   }

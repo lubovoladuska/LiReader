@@ -422,11 +422,19 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
                         color: AppTheme.primaryPink.withValues(alpha: 0.1),
                         alignment: Alignment.center,
                         child: settings.hasBackgroundImage && !settings.isAssetBackground
-                            ? Image.file(
-                                File(settings.backgroundImagePath!),
+                            ? Image(
+                                image: ResizeImage(
+                                  FileImage(File(settings.backgroundImagePath!)),
+                                  width: 160,
+                                ),
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
+                                errorBuilder: (ctx, err, st) => const Icon(
+                                  Icons.add_photo_alternate_rounded,
+                                  color: AppTheme.primaryPinkDark,
+                                  size: 26,
+                                ),
                               )
                             : const Icon(
                                 Icons.add_photo_alternate_rounded,
@@ -455,28 +463,43 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Fit Mode & Rotate 90
+                      // Fit Mode & Rotate Controls
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text(
-                            'Подгонка изображения:',
+                            'Поворот изображения:',
                             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                           ),
-                          OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                              visualDensity: VisualDensity.compact,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            ),
-                            icon: const Icon(Icons.rotate_right_rounded, size: 16),
-                            label: Text(
-                              'Повернуть 90° (${settings.backgroundRotation}°)',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                            onPressed: () => reader.rotateBackground(),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final deg in [0, 90, 180, 270])
+                                Padding(
+                                  padding: const EdgeInsets.only(left: 4),
+                                  child: ChoiceChip(
+                                    visualDensity: VisualDensity.compact,
+                                    label: Text('$deg°', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                    selected: settings.backgroundRotation == deg,
+                                    selectedColor: AppTheme.primaryPinkDark.withValues(alpha: 0.25),
+                                    onSelected: (_) => reader.setBackgroundRotation(deg),
+                                  ),
+                                ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(Icons.rotate_right_rounded, size: 18),
+                                tooltip: 'Повернуть +90°',
+                                visualDensity: VisualDensity.compact,
+                                onPressed: () => reader.rotateBackground(),
+                              ),
+                            ],
                           ),
                         ],
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Подгонка изображения:',
+                        style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
@@ -674,9 +697,15 @@ class ReaderThemeSettingsSheet extends StatelessWidget {
     }
 
     final path = settings.backgroundImagePath!;
-    final ImageProvider imageProvider = settings.isAssetBackground
+    final ImageProvider rawProvider = settings.isAssetBackground
         ? AssetImage(path)
         : FileImage(File(path)) as ImageProvider;
+
+    final ImageProvider imageProvider = ResizeImage(
+      rawProvider,
+      width: 600,
+      policy: ResizeImagePolicy.fit,
+    );
 
     BoxFit fit = BoxFit.cover;
     ImageRepeat repeat = ImageRepeat.noRepeat;

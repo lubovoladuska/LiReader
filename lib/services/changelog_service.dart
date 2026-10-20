@@ -32,10 +32,42 @@ class ChangelogService {
   /// History of all releases. Add new versions to the top of this list.
   static const List<ReleaseNote> releases = [
     ReleaseNote(
+      version: '1.2.2',
+      date: 'Октябрь 2026',
+      headline: 'Оптимизация тем, ручной поворот обоев и устранение черного экрана',
+      isLatest: true,
+      items: [
+        ChangelogItem(
+          icon: Icons.rotate_right_rounded,
+          title: 'Ручной поворот и исправление автоповорота фото',
+          description:
+              'Устранена проблема, когда фото из галереи самопроизвольно поворачивалось набок. Добавлены точные переключатели угла (0°, 90°, 180°, 270°) и кнопка шагового поворота как в шторке тем, так и в расширенном редакторе.',
+        ),
+        ChangelogItem(
+          icon: Icons.flash_on_rounded,
+          title: 'Мгновенный старт читалки без черного экрана',
+          description:
+              'Настройки темы и кастомные обои теперь загружаются мгновенно в приоритетном порядке. Исключены зависания при открытии книги и устранен черный экран при перезаходе в приложение.',
+        ),
+        ChangelogItem(
+          icon: Icons.memory_rounded,
+          title: 'Аппаратная оптимизация памяти (ResizeImage)',
+          description:
+              'Кастомные фотографии высокого разрешения (12-48 Мп) теперь оптимизируются при декодировании, предотвращая перегрузку оперативной памяти и видеочипа при наложении размытия и фильтров.',
+        ),
+        ChangelogItem(
+          icon: Icons.save_rounded,
+          title: 'Надежное постоянное хранение обоев',
+          description:
+              'Выбранные фотографии теперь сохраняются в защищенную постоянную директорию приложения, поэтому фоны больше не исчезают после перезапуска или очистки системного кэша Android.',
+        ),
+      ],
+    ),
+    ReleaseNote(
       version: '1.2.1',
       date: 'Октябрь 2026',
       headline: 'Всплывающий переводчик, толковый словарь (Wiktionary/Википедия) и личный словарь',
-      isLatest: true,
+      isLatest: false,
       items: [
         ChangelogItem(
           icon: Icons.g_translate_rounded,

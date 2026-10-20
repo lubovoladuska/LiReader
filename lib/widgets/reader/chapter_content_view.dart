@@ -427,9 +427,15 @@ class _ChapterContentViewState extends State<ChapterContentView> {
     }
 
     final path = settings.backgroundImagePath!;
-    final ImageProvider imageProvider = settings.isAssetBackground
+    final ImageProvider rawProvider = settings.isAssetBackground
         ? AssetImage(path)
         : FileImage(File(path)) as ImageProvider;
+
+    final ImageProvider imageProvider = ResizeImage(
+      rawProvider,
+      width: 1440,
+      policy: ResizeImagePolicy.fit,
+    );
 
     BoxFit fit = BoxFit.cover;
     ImageRepeat repeat = ImageRepeat.noRepeat;
