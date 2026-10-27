@@ -19,6 +19,8 @@ import '../widgets/reader/sleep_timer_dialog.dart';
 import '../widgets/reader/tts_mini_player.dart';
 import '../widgets/reader/comic_viewer.dart';
 import 'wallpaper_customization_screen.dart';
+import '../services/ambient_sound_service.dart';
+import '../widgets/reader/ambient_sound_sheet.dart';
 
 class ReaderScreen extends StatefulWidget {
   final BookItem book;
@@ -59,6 +61,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   @override
   void dispose() {
     _clockTimer?.cancel();
+    AmbientSoundService.instance.stop();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     _pageController.dispose();
     super.dispose();
@@ -441,6 +444,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                           ),
                                       ],
                                     ),
+                                    // Ambient Soundscape button
+                                    ValueListenableBuilder<bool>(
+                                      valueListenable: AmbientSoundService.instance.isPlayingNotifier,
+                                      builder: (context, isPlaying, _) {
+                                        return IconButton(
+                                          icon: Icon(
+                                            isPlaying ? Icons.graphic_eq_rounded : Icons.spatial_audio_off_rounded,
+                                            color: isPlaying ? AppTheme.primaryPinkDark : null,
+                                          ),
+                                          tooltip: isPlaying ? 'Звуки уюта (играет)' : 'Звуки уюта (эмбиент)',
+                                          onPressed: () => AmbientSoundSheet.show(context),
+                                        );
+                                      },
+                                    ),
                                     // Theme & Typography Settings
                                     if (widget.book.format != BookFormat.pdf)
                                       IconButton(
@@ -470,6 +487,9 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                         case 'search':
                                           _showSearchSheet(context, reader);
                                           break;
+                                        case 'ambient':
+                                          AmbientSoundSheet.show(context);
+                                          break;
                                         case 'tts':
                                           reader.startTts();
                                           break;
@@ -479,6 +499,16 @@ class _ReaderScreenState extends State<ReaderScreen> {
                                       }
                                     },
                                     itemBuilder: (ctx) => [
+                                      const PopupMenuItem(
+                                        value: 'ambient',
+                                        child: Row(
+                                          children: [
+                                            Icon(Icons.graphic_eq_rounded, size: 20, color: AppTheme.primaryPinkDark),
+                                            SizedBox(width: 12),
+                                            Text('Звуки уюта (Эмбиент)'),
+                                          ],
+                                        ),
+                                      ),
                                       if (widget.book.format != BookFormat.pdf && !isComic)
                                         const PopupMenuItem(
                                           value: 'tts',

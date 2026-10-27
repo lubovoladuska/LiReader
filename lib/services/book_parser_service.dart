@@ -25,11 +25,13 @@ class BookParsedData {
   final String title;
   final String author;
   final List<BookChapter> chapters;
+  final Map<String, String> footnotes;
 
   BookParsedData({
     required this.title,
     required this.author,
     required this.chapters,
+    this.footnotes = const {},
   });
 }
 
@@ -665,10 +667,68 @@ class BookParserService {
       ));
     }
 
+    // Extract footnotes from HTML/XHTML files in EPUB
+    final footnotes = <String, String>{};
+    for (final file in archive.files) {
+      final name = file.name.toLowerCase();
+      if (name.endsWith('.xhtml') || name.endsWith('.html') || name.endsWith('.htm')) {
+        try {
+          final html = utf8.decode(file.content as List<int>, allowMalformed: true);
+          final asideMatches = RegExp(r"""<aside[^>]*id=['"]([^'"]+)['"][^>]*>([\s\S]*?)</aside>""", caseSensitive: false).allMatches(html);
+          for (final m in asideMatches) {
+            final id = m.group(1)?.trim();
+            final txt = _extractTextFromHtml(m.group(2) ?? '');
+            if (id != null && id.isNotEmpty && txt.isNotEmpty) {
+              footnotes[id] = txt;
+              footnotes['#$id'] = txt;
+              final numMatch = RegExp(r'^\D*(\d+)\D*$').firstMatch(id);
+              if (numMatch != null) {
+                footnotes[numMatch.group(1)!] = txt;
+                footnotes['[${numMatch.group(1)!}]'] = txt;
+              }
+            }
+          }
+
+          final noteElemMatches = RegExp(r"""<([a-z0-9]+)[^>]*id=['"]([^'"]+)['"][^>]*class=['"][^'"]*(?:footnote|endnote|annotation)[^'"]*['"][^>]*>([\s\S]*?)</>""", caseSensitive: false).allMatches(html);
+          for (final m in noteElemMatches) {
+            final id = m.group(2)?.trim();
+            final txt = _extractTextFromHtml(m.group(3) ?? '');
+            if (id != null && id.isNotEmpty && txt.isNotEmpty) {
+              footnotes[id] = txt;
+              footnotes['#$id'] = txt;
+              final numMatch = RegExp(r'^\D*(\d+)\D*$').firstMatch(id);
+              if (numMatch != null) {
+                footnotes[numMatch.group(1)!] = txt;
+                footnotes['[${numMatch.group(1)!}]'] = txt;
+              }
+            }
+          }
+
+          if (name.contains('note') || name.contains('comment') || name.contains('fn')) {
+            final idElemMatches = RegExp(r"""<([a-z0-9]+)[^>]*id=['"]([^'"]+)['"][^>]*>([\s\S]*?)</>""", caseSensitive: false).allMatches(html);
+            for (final m in idElemMatches) {
+              final id = m.group(2)?.trim();
+              final txt = _extractTextFromHtml(m.group(3) ?? '');
+              if (id != null && id.isNotEmpty && txt.isNotEmpty && txt.length < 2000) {
+                footnotes[id] = txt;
+                footnotes['#$id'] = txt;
+                final numMatch = RegExp(r'^\D*(\d+)\D*$').firstMatch(id);
+                if (numMatch != null) {
+                  footnotes[numMatch.group(1)!] = txt;
+                  footnotes['[${numMatch.group(1)!}]'] = txt;
+                }
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
     return BookParsedData(
       title: title,
       author: author,
       chapters: chapters,
+      footnotes: footnotes,
     );
   }
 
@@ -761,19 +821,46 @@ class BookParserService {
       ));
     }
 
-    return BookParsedData(title: title, author: author, chapters: chapters);
+    final footnotes = <String, String>{};
+    final notesBodyMatch = RegExp(r"""<body[^>]*name=['"](?:notes|comments)['"][^>]*>([\s\S]*?)</body>""", caseSensitive: false).firstMatch(rawXml);
+    if (notesBodyMatch != null) {
+      final nbText = notesBodyMatch.group(1)!;
+      final secMatches = RegExp(r"""<section[^>]*id=['"]([^'"]+)['"][^>]*>([\s\S]*?)</section>""", caseSensitive: false).allMatches(nbText);
+      for (final sm in secMatches) {
+        final id = sm.group(1)!.trim();
+        final rawSec = sm.group(2)!;
+        final titleMatch = RegExp(r'<title[^>]*>([\s\S]*?)</title>', caseSensitive: false).firstMatch(rawSec);
+        final title = titleMatch != null ? sanitizeReadingText(titleMatch.group(1)!.replaceAll(RegExp(r'<[^>]+>'), ' ')) : '';
+        final pMatches = RegExp(r'<p[^>]*>([\s\S]*?)</p>', caseSensitive: false).allMatches(rawSec);
+        final ps = pMatches.map((m) => sanitizeReadingText(m.group(1)!.replaceAll(RegExp(r'<[^>]+>'), ' '))).where((s) => s.isNotEmpty).join('\n\n');
+        if (ps.isNotEmpty) {
+          footnotes[id] = ps;
+          footnotes['#$id'] = ps;
+          if (title.isNotEmpty) {
+            footnotes[title] = ps;
+            footnotes['[$title]'] = ps;
+          }
+        }
+      }
+    }
+
+    return BookParsedData(title: title, author: author, chapters: chapters, footnotes: footnotes);
   }
 
   static Future<BookParsedData> parseFb2(String filePath) async {
     final bytes = await _loadFb2Bytes(filePath);
     final rawContent = _decodeFb2Bytes(bytes);
+    return parseFb2ContentForTest(rawContent, p.basenameWithoutExtension(filePath));
+  }
+
+  static BookParsedData parseFb2ContentForTest(String rawContent, String fallbackTitle) {
     final cleanContent = _cleanFb2Xml(rawContent);
     final strippedContent = _stripBinaryTags(cleanContent);
 
     try {
       final xml = XmlDocument.parse(strippedContent);
 
-      String title = p.basenameWithoutExtension(filePath);
+      String title = fallbackTitle;
       String author = 'Неизвестный автор';
 
       final titleInfo = xml.findAllElements('title-info').firstOrNull;
@@ -790,8 +877,63 @@ class BookParserService {
         }
       }
 
+      final footnotes = <String, String>{};
+      final bodies = xml.findAllElements('body').toList();
+      XmlElement? mainBody;
+      final notesBodies = <XmlElement>[];
+
+      for (final body in bodies) {
+        final name = body.getAttribute('name')?.toLowerCase() ?? '';
+        if (name.contains('note') || name.contains('comment')) {
+          notesBodies.add(body);
+        } else if (mainBody == null) {
+          mainBody = body;
+        } else {
+          final hasNotes = body.findAllElements('section').any((s) {
+            final id = s.getAttribute('id')?.toLowerCase() ?? '';
+            return id.startsWith('n_') || id.startsWith('note') || id.startsWith('comment');
+          });
+          if (hasNotes) {
+            notesBodies.add(body);
+          }
+        }
+      }
+
+      for (final nBody in notesBodies) {
+        for (final sec in nBody.findAllElements('section')) {
+          final id = sec.getAttribute('id')?.trim() ?? '';
+          final titleElem = sec.findElements('title').firstOrNull;
+          final secTitle = titleElem?.innerText.trim() ?? '';
+
+          final paragraphs = <String>[];
+          for (final pElem in sec.findAllElements('p')) {
+            if (titleElem != null && titleElem.descendants.contains(pElem)) continue;
+            final pText = sanitizeReadingText(pElem.innerText);
+            if (pText.isNotEmpty) {
+              paragraphs.add(pText);
+            }
+          }
+
+          final noteText = paragraphs.join('\n\n');
+          if (noteText.isNotEmpty) {
+            if (id.isNotEmpty) {
+              footnotes[id] = noteText;
+              footnotes['#$id'] = noteText;
+            }
+            if (secTitle.isNotEmpty) {
+              footnotes[secTitle] = noteText;
+              footnotes['[$secTitle]'] = noteText;
+            }
+          }
+        }
+      }
+
       final chapters = <BookChapter>[];
-      final sections = xml.findAllElements('section');
+      final rawSections = mainBody != null ? mainBody.findAllElements('section') : xml.findAllElements('section');
+      final sections = rawSections.where((s) {
+        final id = s.getAttribute('id')?.trim() ?? '';
+        return !footnotes.containsKey(id);
+      });
       int idx = 0;
 
       for (final sec in sections) {
@@ -819,7 +961,7 @@ class BookParserService {
       }
 
       if (chapters.isEmpty) {
-        final body = xml.findAllElements('body').firstOrNull?.innerText ?? '';
+        final body = mainBody?.innerText ?? xml.findAllElements('body').firstOrNull?.innerText ?? '';
         final content = sanitizeReadingText(body);
         chapters.add(BookChapter(
           index: 0,
@@ -832,10 +974,11 @@ class BookParserService {
         title: title,
         author: author,
         chapters: chapters,
+        footnotes: footnotes,
       );
     } catch (e) {
       debugPrint('XmlDocument.parse failed for FB2: $e. Falling back to regex parser.');
-      return _parseFb2RegexFallback(cleanContent, p.basenameWithoutExtension(filePath));
+      return _parseFb2RegexFallback(cleanContent, fallbackTitle);
     }
   }
 
@@ -902,6 +1045,23 @@ class BookParserService {
     text = text.replaceAll(RegExp(r'<script[^>]*>[\s\S]*?</script>', caseSensitive: false), '');
     text = text.replaceAll(RegExp(r'<head[^>]*>[\s\S]*?</head>', caseSensitive: false), '');
     text = text.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
+
+    // Convert footnote links <a href="#...">1</a> to recognizable [1]
+    text = text.replaceAllMapped(
+      RegExp(r"""<a[^>]*href=['"](?:[^'"]*#)?([^'"#]+)['"][^>]*>(.*?)</a>""", caseSensitive: false),
+      (match) {
+        final inner = match.group(2)?.trim() ?? '';
+        final cleanInner = inner.replaceAll(RegExp(r'<[^>]+>'), '').trim();
+        if (cleanInner.isEmpty) return '';
+        if (RegExp(r'^\d+$|^\*+$|^\[\d+\]$|^\[\*+\]$').hasMatch(cleanInner)) {
+          if (!cleanInner.startsWith('[')) {
+            return ' [$cleanInner] ';
+          }
+          return ' $cleanInner ';
+        }
+        return cleanInner;
+      },
+    );
 
     // 2. Line break tags -> single newline
     text = text.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');

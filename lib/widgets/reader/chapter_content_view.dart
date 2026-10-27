@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import 'highlight_context_menu.dart';
 import 'quote_card_dialog.dart';
 import 'translation_sheet.dart';
+import 'smart_footnote_sheet.dart';
 import '../../services/tts_service.dart';
 
 class ChapterContentView extends StatefulWidget {
@@ -315,6 +316,68 @@ class _ChapterContentViewState extends State<ChapterContentView> {
   }
 
   /// Builds TextSpans with inline highlights and live TTS paragraph glow
+  List<TextSpan> _buildFootnoteAwareSpans(
+    String text,
+    Color baseTextColor,
+    ReaderProvider reader,
+    BuildContext context,
+  ) {
+    if (reader.parsedData == null || reader.parsedData!.footnotes.isEmpty) {
+      return [TextSpan(text: text, style: TextStyle(color: baseTextColor))];
+    }
+
+    final footnoteRegex = RegExp(r'\[(?:\*+|\d+|[a-zA-Z0-9_\-]+)\]');
+    final matches = footnoteRegex.allMatches(text).toList();
+    if (matches.isEmpty) {
+      return [TextSpan(text: text, style: TextStyle(color: baseTextColor))];
+    }
+
+    final result = <TextSpan>[];
+    int cursor = 0;
+
+    for (final m in matches) {
+      final marker = m.group(0)!;
+      final fnContent = reader.getFootnote(marker);
+      if (fnContent != null) {
+        if (m.start > cursor) {
+          result.add(TextSpan(
+            text: text.substring(cursor, m.start),
+            style: TextStyle(color: baseTextColor),
+          ));
+        }
+
+        result.add(TextSpan(
+          text: marker,
+          style: const TextStyle(
+            color: AppTheme.primaryPinkDark,
+            fontWeight: FontWeight.bold,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () {
+              SmartFootnoteSheet.show(
+                context,
+                title: 'Сноска \$marker',
+                content: fnContent,
+                backgroundColor: reader.themeSettings.activeBackground,
+                textColor: reader.themeSettings.activeText,
+              );
+            },
+        ));
+
+        cursor = m.end;
+      }
+    }
+
+    if (cursor < text.length) {
+      result.add(TextSpan(
+        text: text.substring(cursor),
+        style: TextStyle(color: baseTextColor),
+      ));
+    }
+
+    return result;
+  }
+
   List<TextSpan> _buildHighlightedSpans(
     BuildContext context,
     String fullText,
@@ -342,7 +405,7 @@ class _ChapterContentViewState extends State<ChapterContentView> {
     }
 
     if (highlights.isEmpty && ttsStart == -1) {
-      return [TextSpan(text: fullText, style: TextStyle(color: baseTextColor))];
+      return _buildFootnoteAwareSpans(fullText, baseTextColor, reader, context);
     }
 
     final spans = <TextSpan>[];
@@ -385,9 +448,11 @@ class _ChapterContentViewState extends State<ChapterContentView> {
       if (interval.start < cursor) continue;
 
       if (interval.start > cursor) {
-        spans.add(TextSpan(
-          text: fullText.substring(cursor, interval.start),
-          style: TextStyle(color: baseTextColor),
+        spans.addAll(_buildFootnoteAwareSpans(
+          fullText.substring(cursor, interval.start),
+          baseTextColor,
+          reader,
+          context,
         ));
       }
 
@@ -412,9 +477,11 @@ class _ChapterContentViewState extends State<ChapterContentView> {
     }
 
     if (cursor < fullText.length) {
-      spans.add(TextSpan(
-        text: fullText.substring(cursor),
-        style: TextStyle(color: baseTextColor),
+      spans.addAll(_buildFootnoteAwareSpans(
+        fullText.substring(cursor),
+        baseTextColor,
+        reader,
+        context,
       ));
     }
 

@@ -32,10 +32,36 @@ class ChangelogService {
   /// History of all releases. Add new versions to the top of this list.
   static const List<ReleaseNote> releases = [
     ReleaseNote(
+      version: '1.3.0',
+      date: 'Октябрь 2026',
+      headline: 'Всплывающие сноски в 1 касание и Фоновый Эмбиент (Звуки уюта)',
+      isLatest: true,
+      items: [
+        ChangelogItem(
+          icon: Icons.menu_book_rounded,
+          title: 'Умные всплывающие сноски (Smart Footnotes)',
+          description:
+              'При чтении книг в форматах FB2 и EPUB клик по номеру сноски [1] или * мгновенно открывает стильную шторку с текстом примечания прямо над страницей. Больше никаких прыжков в конец книги и потери фокуса!',
+        ),
+        ChangelogItem(
+          icon: Icons.graphic_eq_rounded,
+          title: 'Фоновый Эмбиент (Звуки уюта)',
+          description:
+              'Встроенный генератор атмосферных звуков: тихий дождь за окном, потрескивание камина, ночной лес и кофейня. Бесшовное зацикливание, независимая громкость и работа при выключенном экране.',
+        ),
+        ChangelogItem(
+          icon: Icons.bedtime_rounded,
+          title: 'Таймер сна с мягким затуханием',
+          description:
+              'Засыпайте под любимую книгу и шум дождя: по истечении таймера сна громкость звука плавно затухает за 3 секунды, а воспроизведение автоматически останавливается.',
+        ),
+      ],
+    ),
+    ReleaseNote(
       version: '1.2.2',
       date: 'Октябрь 2026',
       headline: 'Оптимизация тем, ручной поворот обоев и устранение черного экрана',
-      isLatest: true,
+      isLatest: false,
       items: [
         ChangelogItem(
           icon: Icons.rotate_right_rounded,

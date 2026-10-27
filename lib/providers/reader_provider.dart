@@ -94,6 +94,31 @@ class ReaderProvider extends ChangeNotifier {
           ? _searchResults[_currentSearchIndex]
           : null;
 
+  String? getFootnote(String marker) {
+    if (_parsedData == null || _parsedData!.footnotes.isEmpty) return null;
+    final trimmed = marker.trim();
+    if (_parsedData!.footnotes.containsKey(trimmed)) {
+      return _parsedData!.footnotes[trimmed];
+    }
+    final stripped = trimmed.replaceAll(RegExp(r'[\[\]\^#*]'), '').trim();
+    if (_parsedData!.footnotes.containsKey(stripped)) {
+      return _parsedData!.footnotes[stripped];
+    }
+    if (_parsedData!.footnotes.containsKey('#')) {
+      return _parsedData!.footnotes['#'];
+    }
+    if (_parsedData!.footnotes.containsKey('n_')) {
+      return _parsedData!.footnotes['n_'];
+    }
+    if (_parsedData!.footnotes.containsKey('note_')) {
+      return _parsedData!.footnotes['note_'];
+    }
+    if (_parsedData!.footnotes.containsKey('fn_')) {
+      return _parsedData!.footnotes['fn_'];
+    }
+    return null;
+  }
+
   // Sleep Timer Getters
   bool get isSleepTimerActive => _sleepTimer != null && _sleepTimer!.isActive;
   int get sleepTimerRemainingSeconds => _sleepTimerRemainingSeconds;
