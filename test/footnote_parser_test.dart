@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lireader/models/book_item.dart';
 import 'package:lireader/services/book_parser_service.dart';
 
 void main() {
