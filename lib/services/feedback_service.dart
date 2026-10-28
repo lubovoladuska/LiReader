@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'changelog_service.dart';
 
 class FeedbackService {
   static const String developerPhoneNumber = '+77087153537';
   static const String whatsappNumberDigits = '77087153537';
-  static const String defaultFeedbackMessage =
-      'Здравствуйте! Я пользуюсь приложением LiReader (v1.0.0). Хочу поделиться отзывом: ';
+  static String get defaultFeedbackMessage =>
+      'Здравствуйте! Я пользуюсь приложением LiReader (v${ChangelogService.currentVersion}). Хочу поделиться отзывом: ';
 
   /// Opens developer's WhatsApp with a pre-filled greeting message.
   static Future<void> openDeveloperWhatsApp(
     BuildContext context, {
-    String message = defaultFeedbackMessage,
+    String? message,
   }) async {
-    final encodedMessage = Uri.encodeComponent(message);
+    final effectiveMessage = message ?? defaultFeedbackMessage;
+    final encodedMessage = Uri.encodeComponent(effectiveMessage);
     final waMeUrl = 'https://wa.me/$whatsappNumberDigits?text=$encodedMessage';
     final waUri = Uri.parse(waMeUrl);
 

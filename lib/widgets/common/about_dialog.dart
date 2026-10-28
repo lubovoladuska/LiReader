@@ -4,6 +4,7 @@ import '../../services/update_service.dart';
 import '../../theme/app_theme.dart';
 import 'app_logo.dart';
 import 'changelog_sheet.dart';
+import '../../services/changelog_service.dart';
 import 'update_dialog.dart';
 
 class AboutLiReaderDialog extends StatelessWidget {
@@ -59,14 +60,14 @@ class AboutLiReaderDialog extends StatelessWidget {
                   width: 1,
                 ),
               ),
-              child: const Row(
+              child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.auto_awesome_rounded, size: 14, color: AppTheme.primaryPinkDark),
-                  SizedBox(width: 6),
+                  const Icon(Icons.auto_awesome_rounded, size: 14, color: AppTheme.primaryPinkDark),
+                  const SizedBox(width: 6),
                   Text(
-                    'Версия 1.0.1 (Release) • Что нового?',
-                    style: TextStyle(
+                    'Версия ${ChangelogService.currentVersion} • Что нового?',
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       color: AppTheme.primaryPinkDark,

@@ -264,4 +264,5 @@ class ChangelogService {
   ];
 
   static ReleaseNote get latest => releases.first;
+  static String get currentVersion => releases.first.version;
 }

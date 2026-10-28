@@ -5,6 +5,7 @@ import '../../providers/library_provider.dart';
 import '../../screens/reading_stats_screen.dart';
 import '../../services/backup_service.dart';
 import '../../services/feedback_service.dart';
+import '../../services/changelog_service.dart';
 import '../../services/update_service.dart';
 import '../../theme/app_theme.dart';
 import '../common/about_dialog.dart';
@@ -427,9 +428,9 @@ class ShelvesSidebar extends StatelessWidget {
                     'О приложении',
                     style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w500),
                   ),
-                  trailing: const Text(
-                    'v1.0.1',
-                    style: TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
+                  trailing: Text(
+                    'v${ChangelogService.currentVersion}',
+                    style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold),
                   ),
                   onTap: () => AboutLiReaderDialog.show(context),
                 ),
