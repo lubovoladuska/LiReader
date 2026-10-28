@@ -51,6 +51,7 @@ app.*.map.json
 
 # Build artifacts and backups
 *.apk
+*.zip
 backup_test.json
 
 # AI Agent Handover & Local Skills (Private instructions, never commit to public repo)
