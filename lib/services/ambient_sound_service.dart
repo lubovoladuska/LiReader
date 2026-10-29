@@ -39,8 +39,17 @@ class AmbientSoundService {
   double getTrackVolume(String trackId) => _trackVolumes[trackId] ?? 0.0;
   bool isTrackActive(String trackId) => (_trackVolumes[trackId] ?? 0.0) > 0.0;
 
+  bool _cacheCleared = false;
+
   /// Ensures an [AudioPlayer] exists and is loaded for [trackId].
   Future<AudioPlayer?> _getOrInitPlayer(String trackId) async {
+    if (!_cacheCleared) {
+      _cacheCleared = true;
+      try {
+        await AudioPlayer.clearAssetCache();
+      } catch (_) {}
+    }
+
     if (_players.containsKey(trackId)) {
       return _players[trackId];
     }
